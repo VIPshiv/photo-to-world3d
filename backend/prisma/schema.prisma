@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------
+// Users & Auth
+// --------------------------------------
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed
+  name      String?
+  role      UserRole @default(STORE_OWNER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stores    Store[]
+}
+
+enum UserRole {
+  ADMIN
+  STORE_OWNER
+  VIEWER // Future use
+}
+
+// --------------------------------------
+// Store Entities
+// --------------------------------------
+
+model Store {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  slug        String   @unique // For URL: smart360.com/view/nike-downtown
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User      @relation(fields: [ownerId], references: [id])
+  products    Product[]
+  scenes      Scene[]
+}
+
+// --------------------------------------
+// Inventory / Products
+// --------------------------------------
+
+model Product {
+  id             String   @id @default(uuid())
+  storeId        String
+  title          String
+  description    String?
+  price          Decimal? @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  
+  // The "Clean State" images
+  mainImageUrl   String?
+  galleryImages  String[] // Array of URLs
+
+  // For AI Auto-Detection
+  category       String?  // e.g. "shoe", "bag" (used for whitelist)
+  tags           String[] // e.g. ["running", "sport", "red"]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store          Store    @relation(fields: [storeId], references: [id])
+  hotspots       Hotspot[]
+}
+
+// --------------------------------------
+// 360 Tour Data
+// --------------------------------------
+
+model Scene {
+  id          String   @id @default(uuid())
+  storeId     String
+  title       String   // e.g. "Entrance", "Aisle 3"
+  imageUrl    String   // The 360 Panorama URL (Cloudinary/S3)
+  thumbnailUrl String?
+  
+  // Basic metadata for the panorama
+  initialYaw   Float    @default(0)
+  initialPitch Float    @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store        Store     @relation(fields: [storeId], references: [id])
+  hotspots     Hotspot[]
+}
+
+model Hotspot {
+  id          String      @id @default(uuid())
+  sceneId     String
+  productId   String?     // Optional: Can be informational only
+  
+  // Coordinates in the 360 Cluster
+  // Note: We use yaw/pitch instead of x/y for 360 correctness
+  yaw         Float
+  pitch       Float
+  
+  type        HotspotType @default(PRODUCT)
+  label       String?     // Override label text if needed
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  scene       Scene    @relation(fields: [sceneId], references: [id])
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+enum HotspotType {
+  PRODUCT
+  INFO
+  NAVIGATION // For moving between scenes
+}

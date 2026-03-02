@@ -1,0 +1,8 @@
+ultralytics
+opencv-python-headless
+fastapi
+uvicorn
+python-multipart
+pydantic
+requests
+pillow

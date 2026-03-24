@@ -157,4 +157,47 @@ export class ScenesService {
       },
     });
   }
+
+  async stitchScene(files: Express.Multer.File[]): Promise<string> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+
+    const sessionDir = path.join(process.cwd(), 'uploads', `stitch_${Date.now()}`);
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+
+    const filePaths: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+        const filePath = path.join(sessionDir, `img_${i}.jpg`);
+        fs.writeFileSync(filePath, files[i].buffer);
+        filePaths.push(filePath);
+    }
+
+    const outputFilename = `pano_${Date.now()}.jpg`;
+    const outputPath = path.join(process.cwd(), 'uploads', outputFilename);
+    const scriptPath = path.join(process.cwd(), '..', 'model', 'experimental', 'stitch_feature.py');
+    
+    // Command string matching the new python argparse
+    const args = `"${filePaths.join('" "')}"`;
+    try {
+        console.log(`[Stitch Service] Running Python OpenCV stitching...`);
+        const { stdout, stderr } = await execPromise(`python "${scriptPath}" ${args} --out "${outputPath}"`);
+        console.log('[Stitch Output]', stdout);
+        if (stderr) console.error('[Stitch Error]', stderr);
+        
+        // Ensure successful output exists
+        if (!fs.existsSync(outputPath)) {
+            throw new Error('Python script completed but output file not found');
+        }
+
+        // Clean up the temp images
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+
+        // Return the static asset URL path
+        return `/uploads/${outputFilename}`;
+    } catch(e) {
+        console.error('[Stitch Failure]', e);
+        throw new Error('Stitching failed in backend.');
+    }
+  }
 }

@@ -6,12 +6,13 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   ParseFilePipeBuilder,
   HttpStatus,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { ScenesService } from './scenes.service';
 import { UploadService } from '../uploads/upload.service';
 
@@ -57,5 +58,15 @@ export class ScenesController {
     const scene = await this.scenesService.getSceneById(id);
     if (!scene) throw new NotFoundException('Scene not found');
     return scene;
+  }
+
+  @Post('stitch')
+  @UseInterceptors(AnyFilesInterceptor())
+  async stitchScenes(@UploadedFiles() files: Array<Express.Multer.File>) {
+    if (!files || files.length < 2) {
+      throw new BadRequestException('At least 2 files are required for stitching');
+    }
+    const resultUrl = await this.scenesService.stitchScene(files);
+    return { success: true, imageUrl: resultUrl };
   }
 }

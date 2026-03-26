@@ -76,12 +76,6 @@ export default function Home() {
       
       <div className="flex flex-wrap justify-center gap-4">
         <Link 
-          href="/products"
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium shadow-md"
-        >
-          Manage Products
-        </Link>
-        <Link 
           href="/stitch"
           className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md"
         >
@@ -91,7 +85,7 @@ export default function Home() {
           href="/upload"
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-md"
         >
-          Upload Scene
+          Upload Scene / Inventory
         </Link>
         <Link 
           href="/view/demo" 

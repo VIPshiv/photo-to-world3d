@@ -86,6 +86,7 @@ export default function StitchPage() {
     try {
         const response = await fetch('http://localhost:3001/scenes/stitch', {
             method: 'POST',
+            headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
             body: formData,
         });
 

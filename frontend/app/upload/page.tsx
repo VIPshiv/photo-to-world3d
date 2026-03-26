@@ -37,7 +37,9 @@ export default function DashboardPage() {
   // --- Fetch Products on Load ---
   const fetchProducts = async () => {
     try {
-      const res = await fetch('http://localhost:3001/products');
+      const res = await fetch('http://localhost:3001/products', {
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+      });
       if (res.ok) {
         const data = await res.json();
         setProducts(data);
@@ -65,7 +67,10 @@ export default function DashboardPage() {
       // 1. Create Product
       const productRes = await fetch('http://localhost:3001/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-mock-user-id': localStorage.getItem('mockUserId') || ''
+        },
         body: JSON.stringify({
           title: prodTitle,
           price: parseFloat(prodPrice),
@@ -84,6 +89,7 @@ export default function DashboardPage() {
         
         await fetch(`http://localhost:3001/products/${product.id}/image`, {
           method: 'POST',
+          headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
           body: formData,
         });
       }
@@ -112,6 +118,7 @@ export default function DashboardPage() {
     try {
       const res = await fetch('http://localhost:3001/scenes/upload', {
         method: 'POST',
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
         body: formData,
       });
 
@@ -131,7 +138,10 @@ export default function DashboardPage() {
   const deleteProduct = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
     try {
-      await fetch(`http://localhost:3001/products/${id}`, { method: 'DELETE' });
+      await fetch(`http://localhost:3001/products/${id}`, { 
+        method: 'DELETE',
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+      });
       fetchProducts();
     } catch (e) {
       alert('Failed to delete');

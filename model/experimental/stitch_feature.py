@@ -168,7 +168,7 @@ def diagnose_images(image_paths):
                         best_match = match_matrix[u][chain[0]]
                         best_u = u
                         insert_at = 0
-                    
+                      
                     # How well does 'u' match the right-most image in our chain?
                     if match_matrix[u][chain[-1]] > best_match:
                         best_match = match_matrix[u][chain[-1]]

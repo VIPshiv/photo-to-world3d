@@ -61,13 +61,20 @@ export default function StitchPage() {
         return;
     }
 
-    setStatus(`Stitching in progress... This may take a minute!`);
+    setStatus(`Stitching (${mode} mode) in progress...`);
     setResultId(null);
     
     const formData = new FormData();
+    formData.append('mode', mode); // 'cubemap' or 'guided'
     
     if (mode === 'cubemap') {
-        Object.values(cubeImages).forEach(file => file && formData.append('files', file));
+        Object.entries(cubeImages).forEach(([side, file]) => {
+            if (file) {
+                // Send with fieldname matching the side (e.g. 'front', 'left')
+                // This allows backend to identify them by fieldname
+                formData.append(side, file);
+            }
+        });
     } else if (mode === 'guided') {
         if (guidedMode === 'manual') {
             Object.values(guidedImages).forEach(file => file && formData.append('files', file));

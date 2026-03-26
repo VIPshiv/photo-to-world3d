@@ -4,6 +4,8 @@ import { AiService } from '../ai/ai.service';
 import { HotspotType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec } from 'child_process';
+import * as util from 'util';
 
 interface DetectedObject {
   label: string;
@@ -93,16 +95,17 @@ export class ScenesService {
       const hotspotsData = detectedObjects
         .map((obj) => {
           // 1. Trust the AI Link first (if Python CLIP found a match)
-          let product: typeof storeProducts[0] | undefined;
+          let product: (typeof storeProducts)[0] | undefined;
           if (obj.product && obj.product.id) {
-             product = storeProducts.find(p => p.id === obj.product!.id);
+            product = storeProducts.find((p) => p.id === obj.product!.id);
           }
 
           // 2. Fallback: Try name match (only if AI didn't provide a specific link)
           if (!product) {
-              product = storeProducts.find((p) => 
-                p.category?.toLowerCase() === obj.label.toLowerCase() || 
-                p.title.toLowerCase().includes(obj.label.toLowerCase())
+            product = storeProducts.find(
+              (p) =>
+                p.category?.toLowerCase() === obj.label.toLowerCase() ||
+                p.title.toLowerCase().includes(obj.label.toLowerCase()),
             );
           }
 
@@ -158,46 +161,94 @@ export class ScenesService {
     });
   }
 
-  async stitchScene(files: Express.Multer.File[]): Promise<string> {
-    const { exec } = require('child_process');
-    const util = require('util');
+  async stitchScene(
+    files: Express.Multer.File[],
+    mode: string = 'guided',
+  ): Promise<string> {
     const execPromise = util.promisify(exec);
 
-    const sessionDir = path.join(process.cwd(), 'uploads', `stitch_${Date.now()}`);
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-
-    const filePaths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-        const filePath = path.join(sessionDir, `img_${i}.jpg`);
-        fs.writeFileSync(filePath, files[i].buffer);
-        filePaths.push(filePath);
+    const sessionDir = path.join(
+      process.cwd(),
+      'uploads',
+      `stitch_${Date.now()}`,
+    );
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
     }
 
+    const filePaths: string[] = [];
     const outputFilename = `pano_${Date.now()}.jpg`;
     const outputPath = path.join(process.cwd(), 'uploads', outputFilename);
-    const scriptPath = path.join(process.cwd(), '..', 'model', 'experimental', 'stitch_feature.py');
-    
-    // Command string matching the new python argparse
-    const args = `"${filePaths.join('" "')}"`;
+
+    // SAVE FILES TO DISK
+    for (let i = 0; i < files.length; i++) {
+      let filename: string;
+
+      if (mode === 'cubemap') {
+        // Use the fieldname (front, back, left, right, top, bottom)
+        // Fallback to index if fieldname is obscure
+        const name = files[i].fieldname || `face_${i}`;
+        filename = `${name}.jpg`;
+      } else {
+        // Guide/Feature mode just needs generic names
+        filename = `img_${i}.jpg`;
+      }
+
+      const filePath = path.join(sessionDir, filename);
+      fs.writeFileSync(filePath, files[i].buffer);
+      filePaths.push(filePath);
+    }
+
+    // SELECT SCRIPT BASED ON MODE
+    let scriptPath: string;
+    let command: string;
+
+    if (mode === 'cubemap') {
+      console.log(
+        '[Stitch Service] Mode: CUBEMAP -> Using stitch_prototype.py',
+      );
+      scriptPath = path.join(
+        process.cwd(),
+        '..',
+        'model',
+        'experimental',
+        'stitch_prototype.py',
+      );
+      // Prototype script takes input DIRECTORY
+      command = `python "${scriptPath}" "${sessionDir}" --out "${outputPath}"`;
+    } else {
+      console.log('[Stitch Service] Mode: GUIDED -> Using stitch_feature.py');
+      scriptPath = path.join(
+        process.cwd(),
+        '..',
+        'model',
+        'experimental',
+        'stitch_feature.py',
+      );
+      // Feature script takes list of FILES
+      const args = `"${filePaths.join('" "')}"`;
+      command = `python "${scriptPath}" ${args} --out "${outputPath}"`;
+    }
+
     try {
-        console.log(`[Stitch Service] Running Python OpenCV stitching...`);
-        const { stdout, stderr } = await execPromise(`python "${scriptPath}" ${args} --out "${outputPath}"`);
-        console.log('[Stitch Output]', stdout);
-        if (stderr) console.error('[Stitch Error]', stderr);
-        
-        // Ensure successful output exists
-        if (!fs.existsSync(outputPath)) {
-            throw new Error('Python script completed but output file not found');
-        }
+      console.log(`[Stitch Service] Executing: ${command}`);
+      const { stdout, stderr } = await execPromise(command);
+      console.log('[Stitch Output]', stdout);
+      if (stderr) console.error('[Stitch Error]', stderr);
 
-        // Clean up the temp images
-        fs.rmSync(sessionDir, { recursive: true, force: true });
+      // Ensure successful output exists
+      if (!fs.existsSync(outputPath)) {
+        throw new Error('Python script completed but output file not found');
+      }
 
-        // Return the static asset URL path
-        return `/uploads/${outputFilename}`;
-    } catch(e) {
-        console.error('[Stitch Failure]', e);
-        throw new Error('Stitching failed in backend.');
+      // Clean up the temp images
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+
+      // Return the static asset URL path
+      return `/uploads/${outputFilename}`;
+    } catch (e) {
+      console.error('[Stitch Failure]', e);
+      throw new Error('Stitching failed in backend.');
     }
   }
 }

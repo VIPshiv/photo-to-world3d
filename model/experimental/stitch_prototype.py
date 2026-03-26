@@ -473,23 +473,19 @@ def stitch_six_images(input_source, output_name="stitched_panorama.jpg"):
     return True
 
 if __name__ == "__main__":
-    # Check for arguments or use default test logic
     import sys
-    
-    # 1. Look in model/input_images
-    default_input_dir = os.path.join(os.path.dirname(__file__), "..", "input_images")
-    if os.path.exists(default_input_dir) and len(os.listdir(default_input_dir)) > 3:
-        input_source = default_input_dir
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Stitch 6 cubemap images into a panorama.")
+    parser.add_argument('input_dir', help='Directory containing the 6 cubemap face images')
+    parser.add_argument('--out', default='stitched_panorama.jpg', help='Output file path')
+
+    args = parser.parse_args()
+
+    if os.path.exists(args.input_dir):
+        success = stitch_six_images(args.input_dir, args.out)
+        if not success:
+            sys.exit(1)
     else:
-        # Fallback to local sample paths
-        print("No input_images folder found. Using defaults.")
-        input_source = {
-            "front": "sample_front.jpeg",
-            "right": "sample_right.jpeg",
-            "back":  "sample_back.jpeg",
-            "left":  "sample_left.jpeg",
-            "top":   "sample_top.jpeg",
-            "bottom":"sample_bottom.jpeg"
-        }
-        
-    stitch_six_images(input_source)
+        print(f"Error: Input directory '{args.input_dir}' not found.")
+        sys.exit(1)

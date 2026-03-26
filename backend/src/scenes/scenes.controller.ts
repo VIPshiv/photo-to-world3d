@@ -62,11 +62,19 @@ export class ScenesController {
 
   @Post('stitch')
   @UseInterceptors(AnyFilesInterceptor())
-  async stitchScenes(@UploadedFiles() files: Array<Express.Multer.File>) {
+  async stitchScenes(
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @Body() body: { mode?: string },
+  ) {
     if (!files || files.length < 2) {
-      throw new BadRequestException('At least 2 files are required for stitching');
+      throw new BadRequestException(
+        'At least 2 files are required for stitching',
+      );
     }
-    const resultUrl = await this.scenesService.stitchScene(files);
+    const mode = body.mode || 'guided';
+    console.log(`[Stitch Request] Mode: ${mode}, Files: ${files.length}`);
+
+    const resultUrl = await this.scenesService.stitchScene(files, mode);
     return { success: true, imageUrl: resultUrl };
   }
 }

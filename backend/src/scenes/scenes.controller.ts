@@ -11,12 +11,16 @@ import {
   HttpStatus,
   BadRequestException,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { ScenesService } from './scenes.service';
 import { UploadService } from '../uploads/upload.service';
+import { MockAuthGuard } from '../auth/mock-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 @Controller('scenes')
+@UseGuards(MockAuthGuard)
 export class ScenesController {
   constructor(
     private readonly scenesService: ScenesService,
@@ -26,6 +30,7 @@ export class ScenesController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadScene(
+    @CurrentUser() user: any,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({ fileType: /(jpg|jpeg|png)$/ })
@@ -41,16 +46,29 @@ export class ScenesController {
     // Ensures aspect ratio is 2:1 (Panorama)
     this.uploadService.validatePanorama(file.buffer, file.originalname);
 
-    // 2. HARDCODED DEMO STORE
-    // In future, this comes from JWT
-    const demoStoreId = 'store-123';
+    // 2. GET STORE FROM MOCK USER
+    // The MockAuthGuard populated `req.user` which includes `.stores`
+    // We assume the first store for simplicity
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    
+    if (!tenantStoreId) {
+       throw new BadRequestException('No store associated with this user');
+    }
 
     // 3. PROCESSING
     // This will:
     // a) Save the 360 image
     // b) Run the AI to auto-detect hotspots
     // c) Save everything to DB
-    return this.scenesService.processScene(demoStoreId, file, body.title);
+    return this.scenesService.processScene(tenantStoreId, file, body.title);
+  }
+
+  @Get('store/my-scenes')
+  async getMyScenes(@CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) return [];
+    
+    return this.scenesService.getScenesByStoreId(tenantStoreId); // Requires implementation in service
   }
 
   @Get(':id')

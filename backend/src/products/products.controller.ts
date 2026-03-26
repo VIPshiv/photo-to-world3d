@@ -9,20 +9,25 @@ import {
   Delete,
   ParseFilePipeBuilder,
   HttpStatus,
+  UseGuards,
+  BadRequestException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { MockAuthGuard } from '../auth/mock-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 @Controller('products')
+@UseGuards(MockAuthGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  create(@Body() createProductDto: CreateProductDto) {
-    // Hardcoding storeId for Demo purposes. In real app, get from JWT User.
-    const demoStoreId = 'store-123';
-    return this.productsService.create(demoStoreId, createProductDto);
+  create(@CurrentUser() user: any, @Body() createProductDto: CreateProductDto) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store found for user');
+    return this.productsService.create(tenantStoreId, createProductDto);
   }
 
   @Post(':id/image')
@@ -47,9 +52,10 @@ export class ProductsController {
   }
 
   @Get()
-  findAll() {
-    const demoStoreId = 'store-123';
-    return this.productsService.findAll(demoStoreId);
+  findAll(@CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) return [];
+    return this.productsService.findAll(tenantStoreId);
   }
 
   @Delete(':id')

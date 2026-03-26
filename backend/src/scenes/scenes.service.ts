@@ -32,6 +32,20 @@ export class ScenesService {
     private aiService: AiService,
   ) {}
 
+  async getScenesByStoreId(storeId: string) {
+    return this.prisma.scene.findMany({
+      where: { storeId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        hotspots: {
+          include: {
+            product: true
+          }
+        }
+      }
+    });
+  }
+
   async processScene(
     storeId: string,
     file: Express.Multer.File,

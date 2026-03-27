@@ -49,10 +49,11 @@ export class ScenesController {
     // 2. GET STORE FROM MOCK USER
     // The MockAuthGuard populated `req.user` which includes `.stores`
     // We assume the first store for simplicity
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+
     if (!tenantStoreId) {
-       throw new BadRequestException('No store associated with this user');
+      throw new BadRequestException('No store associated with this user');
     }
 
     // 3. PROCESSING
@@ -65,9 +66,10 @@ export class ScenesController {
 
   @Get('store/my-scenes')
   async getMyScenes(@CurrentUser() user: any) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
     if (!tenantStoreId) return [];
-    
+
     return this.scenesService.getScenesByStoreId(tenantStoreId); // Requires implementation in service
   }
 

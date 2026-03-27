@@ -10,7 +10,7 @@ import {
   ParseFilePipeBuilder,
   HttpStatus,
   UseGuards,
-  BadRequestException
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
@@ -25,8 +25,10 @@ export class ProductsController {
 
   @Post()
   create(@CurrentUser() user: any, @Body() createProductDto: CreateProductDto) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store found for user');
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId)
+      throw new BadRequestException('No store found for user');
     return this.productsService.create(tenantStoreId, createProductDto);
   }
 
@@ -53,7 +55,8 @@ export class ProductsController {
 
   @Get()
   findAll(@CurrentUser() user: any) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
     if (!tenantStoreId) return [];
     return this.productsService.findAll(tenantStoreId);
   }

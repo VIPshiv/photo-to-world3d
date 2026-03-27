@@ -6,7 +6,11 @@ const FormData = require('form-data');
 export class AiService {
   private readonly aiWorkerUrl = 'http://localhost:8000'; // Config this in env later
 
-  async detectObjects(imageBuffer: Buffer, filename: string, allowedClasses?: string[]) {
+  async detectObjects(
+    imageBuffer: Buffer,
+    filename: string,
+    allowedClasses?: string[],
+  ) {
     try {
       const formData = new FormData();
       formData.append('file', imageBuffer, { filename });
@@ -15,11 +19,15 @@ export class AiService {
         formData.append('classes', allowedClasses.join(','));
       }
 
-      const response = await axios.post(`${this.aiWorkerUrl}/detect`, formData, {
-        headers: {
-          ...formData.getHeaders(),
+      const response = await axios.post(
+        `${this.aiWorkerUrl}/detect`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+          },
         },
-      });
+      );
 
       if (response.data.success) {
         return response.data.detected_objects;

@@ -39,10 +39,10 @@ export class ScenesService {
       include: {
         hotspots: {
           include: {
-            product: true
-          }
-        }
-      }
+            product: true,
+          },
+        },
+      },
     });
   }
 

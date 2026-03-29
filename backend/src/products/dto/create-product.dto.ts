@@ -3,4 +3,5 @@ export class CreateProductDto {
   price: number;
   description?: string;
   category?: string; // used for auto-tagging later
+  externalLink?: string; // external link for the explore button
 }

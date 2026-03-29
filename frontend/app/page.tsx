@@ -11,6 +11,7 @@ const MOCK_USERS = [
 
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [showCreateOptions, setShowCreateOptions] = useState(false);
 
   useEffect(() => {
     const savedUserId = localStorage.getItem('mockUserId');
@@ -74,25 +75,52 @@ export default function Home() {
         Turn your 360 photos into interactive virtual stores with AI-powered tagging.
       </p>
       
-      <div className="flex flex-wrap justify-center gap-4">
-        <Link 
-          href="/stitch"
-          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md"
+<div className="flex flex-col items-center gap-6 w-full max-w-md mt-6">
+        
+        {/* Button 1: Create Scene */}
+        <div className="w-full">
+          <button
+            onClick={() => setShowCreateOptions(!showCreateOptions)}
+            className="w-full px-6 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold shadow-md text-lg flex items-center justify-between"
+          >
+            <span>Create a Scene</span>
+            <span className={`transform transition-transform ${showCreateOptions ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          
+          {showCreateOptions && (
+            <div className="flex flex-col gap-3 mt-3 w-full animate-in fade-in slide-in-from-top-2 duration-200">
+              <Link
+                href="/stitch"
+                className="px-6 py-3 bg-white text-indigo-700 border-2 border-indigo-100 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition font-semibold shadow-sm w-full block text-center"
+              >
+                1. Create Panorama
+              </Link>
+              <Link
+                href="/upload"
+                className="px-6 py-3 bg-white text-indigo-700 border-2 border-indigo-100 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition font-semibold shadow-sm w-full block text-center"
+              >
+                2. Upload Scene (Objects)
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Button 2: Edit Live Scenes */}
+        <Link
+          href="/scenes/edit"
+          className="w-full px-6 py-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-bold shadow-md text-lg block text-center"
         >
-          Create Panorama
+          Edit Live Scenes
         </Link>
-        <Link 
-          href="/upload"
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-md"
+
+        {/* Button 3: View Scenes */}
+        <Link
+          href="/scenes/view"
+          className="w-full px-6 py-4 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition font-bold shadow-md text-lg block text-center"
         >
-          Upload Scene / Inventory
+          View Scenes
         </Link>
-        <Link 
-          href="/view/demo" 
-          className="px-6 py-3 bg-white text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition font-medium shadow-sm"
-        >
-          View Demo
-        </Link>
+
       </div>
     </div>
   );

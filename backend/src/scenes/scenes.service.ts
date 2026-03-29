@@ -46,6 +46,13 @@ export class ScenesService {
     });
   }
 
+  async finalizeScene(sceneId: string) {
+    return this.prisma.scene.update({
+      where: { id: sceneId },
+      data: { status: 'LIVE' },
+    });
+  }
+
   async processScene(
     storeId: string,
     file: Express.Multer.File,

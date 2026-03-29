@@ -80,6 +80,13 @@ export class ScenesController {
     return scene;
   }
 
+  @Post(':id/finalize')
+  async finalizeScene(@Param('id') id: string) {
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    return this.scenesService.finalizeScene(id);
+  }
+
   @Post('stitch')
   @UseInterceptors(AnyFilesInterceptor())
   async stitchScenes(

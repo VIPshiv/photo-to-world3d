@@ -11,7 +11,7 @@ export default function LocalViewPage() {
     return (
       <div className="flex h-screen items-center justify-center text-red-500 flex-col gap-4">
         <p>No image URL provided.</p>
-        <Link href="/stitch" className="text-blue-500 underline">Back to Stitcher</Link>
+        <button onClick={() => window.close()} className="text-blue-500 underline">Close Preview</button> 
       </div>
     );
   }
@@ -31,13 +31,19 @@ export default function LocalViewPage() {
                   </span>
               </div>
               <p className="text-sm text-gray-500 mb-4">Viewing locally stitched image. Not saved to database.</p>
-              
-              <Link 
-                href="/stitch"
+
+              <button
+                onClick={() => {
+                  if (window.history.length > 2) {
+                    window.history.back();
+                  } else {
+                    window.close();
+                  }
+                }}
                 className="w-full bg-gray-900 text-white font-medium py-2 rounded-lg hover:bg-black transition-colors block text-center"
               >
-                  &larr; Back to Sticher
-              </Link>
+                  &larr; Back / Close Preview
+              </button>
           </div>
       </div>
 

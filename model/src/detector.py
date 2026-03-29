@@ -33,9 +33,8 @@ class ObjectDetector:
         img_width, img_height = scene_image.size
         
         # 1. Detect ALL potential objects (General Scan)
-        # Low confidence to ensure we see everything
-        results = self.model.predict(scene_image, conf=0.05) 
-        
+        # Use a more reasonable confidence to avoid excessive ghost boxes
+        results = self.model.predict(scene_image, conf=0.15)
         matches = []
         crops = []
         crop_metadata = []
@@ -88,11 +87,18 @@ class ObjectDetector:
             print(f"[AI Debug] Crop '{yolo_lbl}' vs Product '{prod_name}' = Score {best_score:.4f}")
 
             # 4. Determine Match Type
-            # If excellent match -> Product
-            # If weak match -> Generic Object
-            if best_score > threshold:
+            # If the CLIP score is high enough OR the YOLO label strictly matches the product category
+            # we classify it as a successful Match. We increased the base threshold because 0.25 is too low for CLIP open-domain.
+            dynamic_threshold = 0.28
+            
+            # Bonus: If the YOLO label identically matches the Product's declared category (e.g. YOLO: 'chair', Category: 'chair')
+            # we relax the threshold slightly because they agree.
+            if best_prod and best_prod['category'].lower() in yolo_lbl.lower():
+                dynamic_threshold = 0.24
+
+            if best_score > dynamic_threshold:
                 matches.append({
-                    "label": best_prod['category'], 
+                    "label": best_prod['category'],
                     "center": crop_metadata[i]['center'],
                     "confidence": best_score,
                     "box": crop_metadata[i]['box'],
@@ -100,6 +106,7 @@ class ObjectDetector:
                     "type": "product_match"
                 })
             else:
+                # Reject mapping to a product if it fails the threshold check
                 matches.append({
                     "label": crop_metadata[i]['yolo_label'],
                     "center": crop_metadata[i]['center'],
@@ -108,27 +115,26 @@ class ObjectDetector:
                     "product": None,
                     "type": "generic_detection"
                 })
-        
-        # 5. Simple Deduplication (No filtering, just merging overlaps)
+
+        # 5. Advanced Deduplication
         # If we have 200 matches, just take the top 20 most confident ones
         # and do basic distance pruning
-        
+
         final_matches = []
         # Sort by confidence
         matches = sorted(matches, key=lambda x: x['confidence'], reverse=True)
-        
+
         for m in matches:
             is_new = True
             for existing in final_matches:
                 dx = m['center']['x'] - existing['center']['x']
                 dy = m['center']['y'] - existing['center']['y']
                 dist = (dx**2 + dy**2)**0.5
-                
-                # Dynamic merging:
-                # If SAME label (e.g. multiple "Table" detections on one big table), merge aggressively (20%)
-                # If DIFFERENT label, only merge if basically identical (5%)
-                merge_threshold = 0.20 if m['label'] == existing['label'] else 0.05
-                
+
+                # Use Intersection over Union (IoU) logic for bounding boxes ideally, 
+                # but distance is faster. A distance of 0.08 on normalized scale is ~8% of the panorama
+                # which easily covers duplicate YOLO overlaps on the same object.
+                merge_threshold = 0.12 if m['label'] == existing['label'] else 0.08
                 if dist < merge_threshold:
                     is_new = False
                     break

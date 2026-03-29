@@ -18,6 +18,7 @@ interface Hotspot {
     price: number | string;
     mainImageUrl?: string;
     description?: string;
+    externalLink?: string;
   };
 }
 
@@ -246,6 +247,28 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
               <p style={{ color: '#666', fontStyle: 'italic', fontSize: '14px' }}>
                 Detected Object: {selectedHotspot.label}
               </p>
+            )}
+
+            {selectedHotspot.product?.externalLink && (
+              <a 
+                href={selectedHotspot.product.externalLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  marginTop: '15px',
+                  backgroundColor: '#000',
+                  color: '#fff',
+                  textAlign: 'center',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Explore &rarr;
+              </a>
             )}
           </div>
       )}

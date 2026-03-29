@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [prodTitle, setProdTitle] = useState('');
   const [prodPrice, setProdPrice] = useState('');
   const [prodCategory, setProdCategory] = useState(AI_CATEGORIES[0]);
+  const [prodLink, setProdLink] = useState('');
   const [prodFile, setProdFile] = useState<File | null>(null);
   const [prodStatus, setProdStatus] = useState('');
 
@@ -75,6 +76,7 @@ export default function DashboardPage() {
           title: prodTitle,
           price: parseFloat(prodPrice),
           category: prodCategory,
+          externalLink: prodLink || undefined,
         }),
       });
 
@@ -97,6 +99,7 @@ export default function DashboardPage() {
       setProdStatus(`Success! Added "${product.title}".`);
       setProdTitle('');
       setProdPrice('');
+      setProdLink('');
       setProdFile(null);
       fetchProducts(); // Refresh list
     } catch (err) {
@@ -145,6 +148,24 @@ export default function DashboardPage() {
       fetchProducts();
     } catch (e) {
       alert('Failed to delete');
+    }
+  };
+
+  const finalizeScene = async () => {
+    if (!sceneId) return;
+    try {
+      const res = await fetch(`http://localhost:3001/scenes/${sceneId}/finalize`, {
+        method: 'POST',
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+      });
+      if (res.ok) {
+        alert('Scene Finalized successfully! It is now live.');
+        window.location.href = `/scenes/view`;
+      } else {
+        alert('Failed to finalize scene.');
+      }
+    } catch (e) {
+      alert('Error finalizing.');
     }
   };
 
@@ -248,6 +269,17 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">External Link / Action URL</label>
+                  <input
+                    type="url"
+                    value={prodLink}
+                    onChange={e => setProdLink(e.target.value)}
+                    placeholder="https://example.com/product/123"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
                    <label className="block text-xs font-medium text-gray-500 mb-1">Product Image (Optional)</label>
                    <input 
                     type="file" 
@@ -344,13 +376,21 @@ export default function DashboardPage() {
                       {hotspotCount > 0 ? `Found ${hotspotCount} matching inventory items.` : 'No matching items found.'}
                     </p>
                     
-                    <Link 
-                      href={`/view/${sceneId}`} 
-                      className="inline-flex items-center justify-center gap-2 w-full bg-green-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 hover:-translate-y-0.5 transition-all"
-                    >
-                      View 3D Experience 
-                      <span>&rarr;</span>
-                    </Link>
+                    <div className="flex flex-col gap-3">
+                      <Link 
+                        href={`/view/${sceneId}`} 
+                        target="_blank"
+                        className="inline-flex items-center justify-center gap-2 w-full bg-white text-green-700 border-2 border-green-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-green-50 transition-all"
+                      >
+                        Preview Draft 3D Experience
+                      </Link>
+                      <button 
+                        onClick={finalizeScene}
+                        className="inline-flex items-center justify-center gap-2 w-full bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 hover:-translate-y-0.5 transition-all"
+                      >
+                        Finalize Scene (Make Live) &rarr;
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

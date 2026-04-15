@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Param,
   Body,
   UseInterceptors,
@@ -26,6 +27,50 @@ export class ScenesController {
     private readonly scenesService: ScenesService,
     private readonly uploadService: UploadService, // Your Panorama Validator
   ) {}
+
+  @Post('analyze')
+  @UseInterceptors(FileInterceptor('file'))
+  async analyzeScene(
+    @CurrentUser() user: any,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /(jpg|jpeg|png)$/ })
+        .addMaxSizeValidator({ maxSize: 20 * 1024 * 1024 })
+        .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
+    )
+    file: Express.Multer.File,
+    @Body() body: { title: string, modelType?: string },
+  ) {
+    if (!file) throw new BadRequestException('File is required');
+    this.uploadService.validatePanorama(file.buffer, file.originalname);
+
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.scenesService.analyzeScene(tenantStoreId, file, body.title, body.modelType || 'yolo');
+  }
+
+  @Post('analyze-existing')
+  async analyzeExistingScene(
+    @CurrentUser() user: any,
+    @Body() body: { imageUrl: string, modelType?: string },
+  ) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.scenesService.analyzeExistingScene(tenantStoreId, body.imageUrl, body.modelType || 'yolo');
+  }
+
+  @Post('save')
+  async saveScene(
+    @CurrentUser() user: any,
+    @Body() body: { title: string, imageUrl: string, hotspots: any[], status?: string, modelType?: string },
+  ) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.scenesService.createSceneWithHotspots(tenantStoreId, body.title, body.imageUrl, body.hotspots, body.status || 'LIVE', body.modelType || 'yolo');
+  }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -85,6 +130,33 @@ export class ScenesController {
     const scene = await this.scenesService.getSceneById(id);
     if (!scene) throw new NotFoundException('Scene not found');
     return this.scenesService.finalizeScene(id);
+  }
+
+  @Post(':id/status')
+  async updateSceneStatus(@Param('id') id: string, @Body() body: { status: string }) {
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    return this.scenesService.updateSceneStatus(id, body.status);
+  }
+
+  @Post(':id/replace-with-draft')
+  async replaceWithDraft(@Param('id') liveId: string, @Body() body: { draftId: string }, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.scenesService.replaceLiveWithDraft(liveId, body.draftId);
+  }
+
+  @Delete(':id')
+  async deleteScene(@Param('id') id: string, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+    
+    // In production, we'd check if the scene belongs to the tenantStoreId
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+
+    return this.scenesService.deleteScene(id);
   }
 
   @Post('stitch')

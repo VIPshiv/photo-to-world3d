@@ -2,10 +2,24 @@
 import { useSearchParams } from 'next/navigation';
 import SceneViewer from '@/components/viewer/SceneViewer';
 import Link from 'next/link';
+import { Suspense, useEffect, useState } from 'react';
 
-export default function LocalViewPage() {
+function LocalViewContent() {
   const searchParams = useSearchParams();
   const imgPath = searchParams.get('img');
+  const [hotspots, setHotspots] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Read the passed hotspots from the preview page
+    const stored = sessionStorage.getItem('previewHotspots');
+    if (stored) {
+      try {
+        setHotspots(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse preview hotspots', e);
+      }
+    }
+  }, []);
 
   if (!imgPath) {
     return (
@@ -49,8 +63,16 @@ export default function LocalViewPage() {
 
       {/* The 3D Viewer */}
       <div className="w-full h-full relative cursor-grab active:cursor-grabbing overflow-hidden outline-none">
-          <SceneViewer imageUrl={fullImageUrl} hotspots={[]} />
+          <SceneViewer imageUrl={fullImageUrl} hotspots={hotspots} />
       </div>
     </div>
+  );
+}
+
+export default function LocalViewPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-white bg-black">Loading Preview...</div>}>
+      <LocalViewContent />
+    </Suspense>
   );
 }

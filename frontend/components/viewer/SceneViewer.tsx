@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { apiUrl } from '@/lib/api';
 
 interface SceneProps {
   imageUrl: string; 
@@ -31,14 +32,16 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
 
     // 1. Setup Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const container = containerRef.current;
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
     camera.position.set(0, 0, 0.1); // Inside the sphere
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.domElement.style.display = 'block'; // Prevent scrollbars
-    containerRef.current.innerHTML = ''; // Clean up previous
-    containerRef.current.appendChild(renderer.domElement);
+    container.innerHTML = ''; // Clean up previous
+    container.appendChild(renderer.domElement);
 
     // 2. The "World" (Sphere)
     // Radius=500, with 60 segments for smoothness
@@ -79,64 +82,113 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
 
     // 4. Manual Controls (Basic Mouse Drag) & Raycasting (Click)
     let isDragging = false;
+    let pointerMoved = false;
     let long = 0, lat = 0;
     let savedX = 0, savedY = 0;
+    const dragThreshold = 4;
 
     // Raycaster for clicks
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const onMouseDown = (e: MouseEvent) => {
-      isDragging = true;
-      savedX = e.clientX;
-      savedY = e.clientY;
+    const updateCamera = () => {
+      const phi = THREE.MathUtils.degToRad(90 - lat);
+      const theta = THREE.MathUtils.degToRad(long);
+      const tx = 500 * Math.sin(phi) * Math.cos(theta);
+      const ty = 500 * Math.cos(phi);
+      const tz = 500 * Math.sin(phi) * Math.sin(theta);
+      camera.lookAt(tx, ty, tz);
     };
 
-    const onClick = (e: MouseEvent) => {
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    const updateRendererSize = () => {
+      const width = container.clientWidth || window.innerWidth;
+      const height = container.clientHeight || window.innerHeight;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+
+    const getPointerPosition = (event: MouseEvent | PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+      };
+    };
+
+    const selectHotspotAtPointer = (event: MouseEvent | PointerEvent) => {
+      const position = getPointerPosition(event);
+      mouse.x = position.x;
+      mouse.y = position.y;
 
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(scene.children);
+      const intersects = raycaster.intersectObjects(scene.children, false);
 
       for (const intersect of intersects) {
-        if (intersect.object.userData.id) {
-            setSelectedHotspot(intersect.object.userData as Hotspot);
-            break;
+        // Our markers will have a label. Wait, if it doesn't have an ID (e.g. preview mode), 
+        // fallback to checking if it has a label so we don't accidentally select the huge background sphere.
+        if (intersect.object.userData && (intersect.object.userData.id || intersect.object.userData.label)) {
+          setSelectedHotspot(intersect.object.userData as Hotspot);
+          break;
         }
       }
     };
 
-    const onMouseMove = (e: MouseEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      isDragging = true;
+      pointerMoved = false;
+      savedX = e.clientX;
+      savedY = e.clientY;
+      renderer.domElement.setPointerCapture?.(e.pointerId);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
       if (!isDragging) return;
       const deltaX = e.clientX - savedX;
       const deltaY = e.clientY - savedY;
+      if (Math.abs(deltaX) > dragThreshold || Math.abs(deltaY) > dragThreshold) {
+        pointerMoved = true;
+      }
       savedX = e.clientX;
       savedY = e.clientY;
 
-      long = (long - deltaX * 0.1) % 360;
-      lat = Math.max(-85, Math.min(85, lat + deltaY * 0.1));
+      long = (long - deltaX * 0.12) % 360;
+      lat = Math.max(-85, Math.min(85, lat + deltaY * 0.12));
       
       updateCamera();
     };
 
-    const onMouseUp = () => { isDragging = false; };
+    const onPointerUp = (e: PointerEvent) => {
+      isDragging = false;
+      try {
+        renderer.domElement.releasePointerCapture?.(e.pointerId);
+      } catch {
+        // ignore release failures
+      }
 
-    document.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.addEventListener('click', onClick);
-
-    const updateCamera = () => {
-      const phi = THREE.MathUtils.degToRad(90 - lat);
-      const theta = THREE.MathUtils.degToRad(long);
-      
-      const tx = 500 * Math.sin(phi) * Math.cos(theta);
-      const ty = 500 * Math.cos(phi);
-      const tz = 500 * Math.sin(phi) * Math.sin(theta);
-      
-      camera.lookAt(tx, ty, tz);
+      if (!pointerMoved) {
+        selectHotspotAtPointer(e);
+      }
     };
+
+    const onPointerCancel = () => {
+      isDragging = false;
+      pointerMoved = false;
+    };
+
+    const onResize = () => {
+      updateRendererSize();
+    };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointermove', onPointerMove);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('resize', onResize);
+
+    updateRendererSize();
+    updateCamera();
 
     // Animation Loop
     let animationId: number;
@@ -149,10 +201,11 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
     // Cleanup
     return () => {
       cancelAnimationFrame(animationId);
-      document.removeEventListener('mousedown', onMouseDown);
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('click', onClick);
+      container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerup', onPointerUp);
+      container.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('resize', onResize);
       
       // Dispose WebGL Context to prevent "Context Loss" errors
       renderer.dispose();
@@ -168,18 +221,20 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
   }, [imageUrl, hotspots]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', touchAction: 'none' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       
       {selectedHotspot && (
         <div style={{
             position: 'absolute',
-            top: '20px',
-            right: '20px',
+            top: '16px',
+            right: '16px',
             background: 'rgba(255,255,255,0.95)',
-            padding: '20px',
-            borderRadius: '12px',
-            maxWidth: '320px',
+            padding: '18px',
+            borderRadius: '14px',
+            width: 'min(320px, calc(100vw - 32px))',
+            maxHeight: 'calc(100vh - 32px)',
+            overflowY: 'auto',
             boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
             zIndex: 10,
             backdropFilter: 'blur(10px)',
@@ -208,14 +263,14 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
             {selectedHotspot.product?.mainImageUrl && (
               <div style={{
                 width: '100%',
-                height: '200px',
+                height: 'clamp(140px, 28vh, 200px)',
                 marginBottom: '15px',
                 borderRadius: '8px',
                 overflow: 'hidden',
                 backgroundColor: '#f5f5f5'
               }}>
                 <img 
-                  src={`http://localhost:3001${selectedHotspot.product.mainImageUrl}`}
+                  src={apiUrl(selectedHotspot.product.mainImageUrl)}
                   alt={selectedHotspot.product.title}
                   style={{
                     width: '100%',
@@ -250,25 +305,30 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
             )}
 
             {selectedHotspot.product?.externalLink && (
-              <a 
-                href={selectedHotspot.product.externalLink} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{
-                  display: 'block',
-                  marginTop: '15px',
-                  backgroundColor: '#000',
-                  color: '#fff',
-                  textAlign: 'center',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                Explore &rarr;
-              </a>
+              <div style={{ marginTop: '15px' }}>
+                <a 
+                  href={selectedHotspot.product.externalLink.startsWith('http') ? selectedHotspot.product.externalLink : `https://${selectedHotspot.product.externalLink}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'block',
+                    backgroundColor: '#000',
+                    color: '#fff',
+                    textAlign: 'center',
+                    padding: '12px 10px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontWeight: 'bold',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#333'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#000'}
+                >
+                  Explore / View Options &rarr;
+                </a>
+              </div>
             )}
           </div>
       )}

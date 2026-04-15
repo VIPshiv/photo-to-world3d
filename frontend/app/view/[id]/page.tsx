@@ -1,4 +1,6 @@
 import SceneViewer from '@/components/viewer/SceneViewer';
+import BackButton from '@/components/viewer/BackButton';
+import Link from 'next/link';
 
 // Next.js 16/15 types for params
 type Props = {
@@ -56,12 +58,14 @@ export default async function ViewScenePage({ params }: Props) {
                     <span>{scene.hotspots.length} Interactive Items</span>
                 </div>
 
-                <a 
-                    href="/" 
-                    className="block w-full text-center py-2 px-4 rounded-lg bg-gray-100 text-gray-700 font-medium text-xs hover:bg-gray-200 hover:text-black transition-colors"
-                >
-                    &larr; Exit to Home
-                </a>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <BackButton />
+                  </div>
+                  <Link href="/scenes/edit" className="flex-1 block text-center py-2 px-4 rounded-lg bg-indigo-50 text-indigo-700 font-medium text-xs hover:bg-indigo-100 hover:text-indigo-900 transition-colors">
+                    Edit Scene
+                  </Link>
+                </div>
             </div>
         </div>
 

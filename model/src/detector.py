@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 import io
 import torch
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPProcessor, CLIPModel, AutoProcessor, AutoModelForZeroShotObjectDetection
 
 class ObjectDetector:
     def __init__(self, model_path="yolov8n.pt"):
@@ -14,6 +14,12 @@ class ObjectDetector:
         print("Loading CLIP model (openai/clip-vit-base-patch32)...")
         self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+        print("Loading Grounding DINO model (IDEA-Research/grounding-dino-tiny)...")
+        self.dino_processor = AutoProcessor.from_pretrained("IDEA-Research/grounding-dino-tiny")
+        self.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained("IDEA-Research/grounding-dino-tiny")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.dino_model.to(self.device)
 
     def get_image_embedding(self, image_bytes):
         """Generates a CLIP embedding vector for an image (Product or Crop)."""
@@ -117,25 +123,57 @@ class ObjectDetector:
                 })
 
         # 5. Advanced Deduplication
-        # If we have 200 matches, just take the top 20 most confident ones
-        # and do basic distance pruning
+        # Route through our universal helper function
+        return self._reduce_duplicate_hotspots(matches)
 
+    def _reduce_duplicate_hotspots(self, matches):
+        """
+        Universal helper function that applies spatial and semantic deduplication.
+        It merges bounding boxes/centers that are highly overlapping or geometrically similar.
+        """
         final_matches = []
-        # Sort by confidence
+        # Sort by confidence so we keep the best ones
         matches = sorted(matches, key=lambda x: x['confidence'], reverse=True)
 
         for m in matches:
             is_new = True
             for existing in final_matches:
+                box_m = m['box']
+                box_e = existing['box']
+                
+                # Calculate Intersection over Union (IoU)
+                x1 = max(box_m[0], box_e[0])
+                y1 = max(box_m[1], box_e[1])
+                x2 = min(box_m[2], box_e[2])
+                y2 = min(box_m[3], box_e[3])
+                
+                inter_area = max(0, x2 - x1) * max(0, y2 - y1)
+                box_m_area = (box_m[2] - box_m[0]) * (box_m[3] - box_m[1])
+                box_e_area = (box_e[2] - box_e[0]) * (box_e[3] - box_e[1])
+                
+                union_area = box_m_area + box_e_area - inter_area
+                iou = inter_area / union_area if union_area > 0 else 0
+
+                # Also calculate distance between centers
                 dx = m['center']['x'] - existing['center']['x']
                 dy = m['center']['y'] - existing['center']['y']
                 dist = (dx**2 + dy**2)**0.5
 
-                # Use Intersection over Union (IoU) logic for bounding boxes ideally, 
-                # but distance is faster. A distance of 0.08 on normalized scale is ~8% of the panorama
-                # which easily covers duplicate YOLO overlaps on the same object.
-                merge_threshold = 0.12 if m['label'] == existing['label'] else 0.08
-                if dist < merge_threshold:
+                # 1. High IoU (Overlap) -> Probably same object.
+                # If labels are different (e.g. 'table' vs 'chair'), require a higher overlap to merge.
+                # Very aggressive merging for same label (even slightly overlapping boxes merge)
+                iou_threshold = 0.15 if m['label'] == existing['label'] else 0.65
+                
+                # 2. Very close centers -> Same object.
+                # Increase merge threshold for identical labels. A huge ping pong table can span 30% of the image
+                merge_threshold = 0.35 if m['label'] == existing['label'] else 0.05
+
+                # 3. Y-Axis Alignment Check (For big tables cut perfectly in half horizontally)
+                # If the Y-centers are almost identical (within 5%), and they are the same label, merge!
+                y_diff = abs(m['center']['y'] - existing['center']['y'])
+                is_aligned = (y_diff < 0.05) and (m['label'] == existing['label'])
+                
+                if iou > iou_threshold or dist < merge_threshold or is_aligned:
                     is_new = False
                     break
             
@@ -143,6 +181,84 @@ class ObjectDetector:
                 final_matches.append(m)
 
         return final_matches[:15] # Return top 15 items 
+
+    def detect_with_dino(self, scene_bytes, product_embeddings):
+        """
+        Uses Grounding DINO to find objects via open-vocabulary text search.
+        Extracts product categories/titles into a single text prompt.
+        """
+        scene_image = Image.open(io.BytesIO(scene_bytes)).convert("RGB")
+        img_width, img_height = scene_image.size
+
+        # Create text prompt from our product inventory
+        # e.g., "laptop . chair . curved monitor ."
+        # DINO expects dot-separated items AND works best with lowercase
+        text_queries = []
+        for p in product_embeddings:
+            # PRIORITIZE TITLE over category to avoid naming collisions!
+            label = p.get('title')
+            if label:
+                clean_label = label.strip().lower()
+                if clean_label not in text_queries:
+                    text_queries.append(clean_label)
+        
+        if not text_queries:
+            # Fallback if no valid products
+            print("[DINO] No product text found for prompt!")
+            return []
+            
+        text_prompt = " . ".join(text_queries) + " ."
+        print(f"[DINO] Searching for: {text_prompt}")
+
+        inputs = self.dino_processor(images=scene_image, text=text_prompt, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            outputs = self.dino_model(**inputs)
+
+        # DINO post-processing
+        # Lowering the box_threshold to make it more sensitive to objects like "ping pong table"
+        results = self.dino_processor.post_process_grounded_object_detection(
+            outputs,
+            inputs.input_ids,
+            box_threshold=0.25, # Lowered from 0.35 to catch more objects
+            text_threshold=0.20, # Lowered from 0.25
+            target_sizes=[scene_image.size[::-1]] # (height, width)
+        )[0]
+
+        matches = []
+        scores = results["scores"].tolist()
+        labels = results["labels"]
+        boxes = results["boxes"].tolist()
+
+        for score, label, box in zip(scores, labels, boxes):
+            x1, y1, x2, y2 = box
+            
+            # Find the original product that best matches this label
+            # DINO sometimes returns partial matches or lowercases it
+            best_prod = None
+            for p in product_embeddings:
+                p_label = p.get('title')
+                # If title perfectly matches, link it to the actual product!
+                if p_label and (label in p_label.lower() or p_label.lower() in label):
+                    best_prod = p
+                    label = p_label # Update tooltip text to matching title
+                    break
+            
+            center_x = ((x1 + x2) / 2) / img_width
+            center_y = ((y1 + y2) / 2) / img_height
+
+            matches.append({
+                "label": label,
+                "center": {"x": center_x, "y": center_y},
+                "confidence": float(score),
+                "box": [x1, y1, x2, y2],
+                "product": best_prod,
+                "type": "dino_detection"
+            })
+            
+            print(f"[DINO Match] Found '{label}' at Conf: {score:.3f}")
+
+        # Route through our universal deduplication logic!
+        return self._reduce_duplicate_hotspots(matches)
 
     def detect_from_image(self, image_bytes, allowed_classes=None):
         """
@@ -201,6 +317,55 @@ class ObjectDetector:
                         "center": {"x": center_x, "y": center_y}
                     })
         
-        # Simple NMS to merge overlap at the split line?
-        # For now, just return all. The user asked to REMOVE the custom distance calcs.
-        return detected_objects
+        # Simple NMS to merge overlap at the split line and general overlaps
+        # Aggressive merging for hotspots
+        final_objects = []
+        detected_objects = sorted(detected_objects, key=lambda x: x['confidence'], reverse=True)
+
+        for obj in detected_objects:
+            is_new = True
+            for existing in final_objects:
+                box_m = obj['bbox']
+                box_e = existing['bbox']
+
+                # Normalize bounding boxes for IoU calculations
+                bx1_m, by1_m, bx2_m, by2_m = box_m[0]/width, box_m[1]/height, box_m[2]/width, box_m[3]/height
+                bx1_e, by1_e, bx2_e, by2_e = box_e[0]/width, box_e[1]/height, box_e[2]/width, box_e[3]/height
+
+                # Calculate Intersection over Union (IoU)
+                x1 = max(bx1_m, bx1_e)
+                y1 = max(by1_m, by1_e)
+                x2 = min(bx2_m, bx2_e)
+                y2 = min(by2_m, by2_e)
+                
+                inter_area = max(0, x2 - x1) * max(0, y2 - y1)
+                box_m_area = (bx2_m - bx1_m) * (by2_m - by1_m)
+                box_e_area = (bx2_e - bx1_e) * (by2_e - by1_e)
+                
+                union_area = box_m_area + box_e_area - inter_area
+                iou = inter_area / union_area if union_area > 0 else 0
+
+                # Also calculate distance between centers
+                dx = obj['center']['x'] - existing['center']['x']
+                dy = obj['center']['y'] - existing['center']['y']
+                dist = (dx**2 + dy**2)**0.5
+
+                # 1. High IoU (Overlap) -> Probably same object.
+                # Very aggressive merging for same label
+                iou_threshold = 0.15 if obj['label'] == existing['label'] else 0.65
+                
+                # 2. Very close centers -> Same object.
+                merge_threshold = 0.35 if obj['label'] == existing['label'] else 0.05
+
+                # 3. Y-Axis Alignment Check (For large objects split across slices)
+                y_diff = abs(obj['center']['y'] - existing['center']['y'])
+                is_aligned = (y_diff < 0.05) and (obj['label'] == existing['label'])
+
+                if iou > iou_threshold or dist < merge_threshold or is_aligned:
+                    is_new = False
+                    break
+            
+            if is_new:
+                final_objects.append(obj)
+
+        return final_objects

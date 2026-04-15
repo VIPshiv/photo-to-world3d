@@ -10,10 +10,12 @@ export class AiService {
     imageBuffer: Buffer,
     filename: string,
     allowedClasses?: string[],
+    modelType: string = 'yolo'
   ) {
     try {
       const formData = new FormData();
       formData.append('file', imageBuffer, { filename });
+      formData.append('model_type', modelType);
 
       if (allowedClasses && allowedClasses.length > 0) {
         formData.append('classes', allowedClasses.join(','));

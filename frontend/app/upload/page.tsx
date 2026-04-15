@@ -32,6 +32,18 @@ export default function DashboardPage() {
   const [sceneFile, setSceneFile] = useState<File | null>(null);
   const [sceneTitle, setSceneTitle] = useState('');
   const [sceneStatus, setSceneStatus] = useState('');
+  const [modelType, setModelType] = useState('yolo');
+  const [isScanning, setIsScanning] = useState(false);
+  
+  // Preview
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [serverImageUrl, setServerImageUrl] = useState<string | null>(null);
+  const [previewHotspots, setPreviewHotspots] = useState<any[]>([]);
+  const [cachedResults, setCachedResults] = useState<{yolo: any[], dino: any[]}>({yolo: [], dino: []});
+  
+  // Track which models we've currently drafted for this file
+  const [draftedViews, setDraftedViews] = useState<{ [key: string]: string | null }>({});
+
   const [hotspotCount, setHotspotCount] = useState(0);
   const [sceneId, setSceneId] = useState<string | null>(null);
 
@@ -51,6 +63,12 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    const draftId = sessionStorage.getItem('draftSceneId');
+    if (draftId) {
+      setSceneId(draftId);
+      setHotspotCount(parseInt(sessionStorage.getItem('draftHotspotCount') || '0', 10));
+      setSceneStatus('You have a draft scene waiting to be finalized.');
+    }
     fetchProducts();
   }, []);
 
@@ -108,18 +126,20 @@ export default function DashboardPage() {
   };
 
   // --- Handler: Upload Scene ---
-  const handleSceneUpload = async (e: React.FormEvent) => {
+  const handleSceneAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sceneFile) return;
+    if (!sceneFile || isScanning) return;
 
-    setSceneStatus('AI is Scanning... (This may take 10-20 seconds)');
+    setIsScanning(true);
+    setSceneStatus(`Running ${modelType.toUpperCase()}... (This may take a moment)`);
     
     const formData = new FormData();
     formData.append('file', sceneFile);
     formData.append('title', sceneTitle);
+    formData.append('modelType', modelType);
 
     try {
-      const res = await fetch('http://localhost:3001/scenes/upload', {
+      const res = await fetch('http://localhost:3001/scenes/analyze', {
         method: 'POST',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
         body: formData,
@@ -127,14 +147,128 @@ export default function DashboardPage() {
 
       const data = await res.json();
       if (res.ok) {
-        setSceneStatus(`Success! Found ${data.hotspotCount} items.`);
-        setHotspotCount(data.hotspotCount);
-        setSceneId(data.sceneId);
+        setSceneStatus(`Success! ${modelType.toUpperCase()} found ${data.hotspots.length} items.`);
+        
+        // Cache result and update preview immediately
+        const newCache = { ...cachedResults, [modelType]: data.hotspots };
+        setCachedResults(newCache);
+        setServerImageUrl(data.imageUrl); // Store raw path for backend
+        setPreviewImage(`http://localhost:3001${data.imageUrl}`);
+        setPreviewHotspots(data.hotspots);
+
       } else {
-        setSceneStatus(`Error: ${data.message || 'Upload failed'}`);
+        setSceneStatus(`Error: ${data.message || 'Analysis failed'}`);
       }
     } catch (error) {
       setSceneStatus(`Network Error: ${String(error)}`);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleModelSwitch = async (type: 'yolo' | 'dino') => {
+    if (isScanning) return;
+    setModelType(type);
+    if (cachedResults[type] && cachedResults[type].length > 0) {
+      setPreviewHotspots(cachedResults[type]);
+      setSceneStatus(`Switched to ${type.toUpperCase()} preview`);
+    } else if (serverImageUrl) {
+      // AI hasn't run for this yet, so we re-analyze the ALREADY uploaded image seamlessly.
+      setSceneStatus(`Running ${type.toUpperCase()}... (This may take a moment)`);
+      setIsScanning(true);
+      try {
+        const res = await fetch('http://localhost:3001/scenes/analyze-existing', {
+          method: 'POST',
+          headers: { 
+            'x-mock-user-id': localStorage.getItem('mockUserId') || '',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            imageUrl: serverImageUrl,
+            modelType: type
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          setSceneStatus(`Success! ${type.toUpperCase()} found ${data.hotspots.length} items.`);
+          const newCache = { ...cachedResults, [type]: data.hotspots };
+          setCachedResults(newCache);
+          setPreviewHotspots(data.hotspots);
+        } else {
+          setSceneStatus(`Error: ${data.message || 'Analysis failed'}`);
+        }
+      } catch (error) {
+        setSceneStatus(`Network Error: ${String(error)}`);
+      } finally {
+        setIsScanning(false);
+      }
+    } else {
+      setSceneStatus(`Ready to scan with ${type.toUpperCase()}`);
+    }
+  };
+
+  const saveScene = async (isDraft = false) => {
+    if (!serverImageUrl) return;
+
+    // Prevent direct finalize if this model was already saved as a draft
+    if (!isDraft && draftedViews[modelType]) {
+      alert("You have already saved this result as a Draft! Please go to the Edit page to finalize it, or undo your draft here if you want to Finalize directly.");
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:3001/scenes/save', {
+        method: 'POST',
+        headers: { 
+          'x-mock-user-id': localStorage.getItem('mockUserId') || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: sceneTitle || 'Untitled',
+          imageUrl: serverImageUrl,
+          modelType: modelType.toLowerCase(),
+          hotspots: previewHotspots,
+          status: isDraft ? 'DRAFT' : 'LIVE'
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        if (isDraft) {
+          setDraftedViews({ ...draftedViews, [modelType]: data.sceneId });
+          setSceneStatus(`Saved as Draft! You can switch models and draft another, or view drafts in Edit page.`);
+          alert(`Successfully saved ${modelType.toUpperCase()} draft!`);
+        } else {
+          alert('Scene Finalized! It is now live.');
+          window.location.href = `/scenes/view`;
+        }
+      } else {
+        alert('Failed to save scene.');
+      }
+    } catch (e) {
+      alert('Error saving.');
+    }
+  };
+
+  const undoDraft = async () => {
+    const draftId = draftedViews[modelType];
+    if (!draftId) return;
+
+    try {
+      const res = await fetch(`http://localhost:3001/scenes/${draftId}`, { 
+        method: 'DELETE',
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+      });
+      if (res.ok) {
+        setDraftedViews({ ...draftedViews, [modelType]: null });
+        setSceneStatus(`Draft reversed. You can now finalize directly or draft again.`);
+      } else {
+        alert('Failed to remove draft.');
+      }
+    } catch (e) {
+      alert('Failed to remove draft.');
     }
   };
 
@@ -159,6 +293,8 @@ export default function DashboardPage() {
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
       if (res.ok) {
+        sessionStorage.removeItem('draftSceneId');
+        sessionStorage.removeItem('draftHotspotCount');
         alert('Scene Finalized successfully! It is now live.');
         window.location.href = `/scenes/view`;
       } else {
@@ -316,7 +452,7 @@ export default function DashboardPage() {
               Upload your 360° panorama. Our AI will scan the image and automatically tag any inventory items it recognizes.
             </p>
 
-            <form onSubmit={handleSceneUpload} className="space-y-6">
+            <form onSubmit={handleSceneAnalyze} className="space-y-6">
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Scene Title</label>
                 <input 
@@ -341,19 +477,31 @@ export default function DashboardPage() {
                         {sceneFile ? '📎' : '☁️'}
                      </div>
                      <div className="text-sm font-medium text-gray-900">
-                        {sceneFile ? sceneFile.name : 'Click to Upload Panorama'}
+                        {sceneFile ? sceneFile.name : (sceneId ? 'Using Draft Image. Click to change.' : 'Click to Upload Panorama')}
                      </div>
                      {!sceneFile && <div className="text-xs text-gray-500">Supports JPG, PNG (2:1 Ratio)</div>}
                   </div>
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Select AI Model</label>
+                <select 
+                  value={modelType}
+                  onChange={e => setModelType(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-black bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+                >
+                  <option value="yolo">🚀 Fast Scan (YOLO + CLIP)</option>
+                  <option value="dino">🧠 Deep Text Search (Grounding DINO)</option>
+                </select>
+              </div>
+
               <button 
                 type="submit"
-                disabled={!sceneFile || sceneStatus.includes('Scanning')}
+                disabled={(!sceneFile && !sceneId) || sceneStatus.includes('Processing') || isScanning}
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-200 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
               >
-                {sceneStatus.includes('Scanning') ? 'Processing...' : '🚀 Upload & Run AI Scan'}
+                {sceneStatus.includes('Scanning') || isScanning ? 'Processing...' : '🚀 Upload & Run AI Scan'}
               </button>
             </form>
 
@@ -377,9 +525,21 @@ export default function DashboardPage() {
                     </p>
                     
                     <div className="flex flex-col gap-3">
+                      <button
+                        onClick={() => {
+                          setSceneId(null);
+                          setSceneStatus('');
+                          setHotspotCount(0);
+                          setSceneFile(null);
+                          sessionStorage.removeItem('draftSceneId');
+                          sessionStorage.removeItem('draftHotspotCount');
+                        }}
+                        className="text-sm text-gray-500 underline mb-2 hover:text-gray-700"
+                      >
+                         Cancel & Upload A Different Scene
+                      </button>
                       <Link 
                         href={`/view/${sceneId}`} 
-                        target="_blank"
                         className="inline-flex items-center justify-center gap-2 w-full bg-white text-green-700 border-2 border-green-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-green-50 transition-all"
                       >
                         Preview Draft 3D Experience
@@ -393,6 +553,106 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* NEW AI PREVIEW UI */}
+            {previewImage && (
+              <div className="mt-8 animate-fade-in bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center shadow-inner">
+                <h3 className="font-bold text-lg text-gray-800 mb-4">Preview AI Results</h3>
+                
+                {/* Model Toggle Buttons */}
+                <div className="flex justify-center gap-4 mb-6">
+                  <button 
+                    type="button"
+                    disabled={isScanning}
+                    onClick={() => handleModelSwitch('yolo')}
+                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'yolo' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    Show YOLO Fast Scan
+                  </button>
+                  <button 
+                    type="button"
+                    disabled={isScanning}
+                    onClick={() => handleModelSwitch('dino')}
+                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'dino' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    Show Grounding DINO
+                  </button>
+                </div>
+
+                {/* Image Preview with overlay markers */}
+                <div className="relative w-full aspect-[2/1] bg-black rounded-lg overflow-hidden border border-gray-300 mb-6">
+                  <img src={previewImage} alt="Scene Preview" className="w-full h-full object-cover opacity-80" />
+                  {previewHotspots && previewHotspots.map((hs, idx) => (
+                    <div 
+                      key={idx} 
+                      className="absolute w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        left: `${(hs.yaw / 360) * 100}%`,
+                        top: `${((90 - hs.pitch) / 180) * 100}%`
+                      }}
+                    >
+                        <div className="absolute top-5 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-10">
+                          {hs.label}
+                        </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-gray-600 text-sm mb-6">
+                  Showing <strong>{previewHotspots ? previewHotspots.length : 0}</strong> items detected by {modelType.toUpperCase()}.
+                </p>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem('previewHotspots', JSON.stringify(previewHotspots));
+                      window.open(`/view/local?img=${serverImageUrl}`, '_blank');
+                    }}
+                    className="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 transition-all flex items-center justify-center gap-2"
+                  >
+                    👁️ Test in 3D Viewer Before Saving
+                  </button>
+
+                  {draftedViews[modelType] ? (
+                    <button
+                      onClick={undoDraft}
+                      disabled={isScanning}
+                      className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 shadow-sm transition-all"
+                    >
+                      ⏪ Saved as Draft! (Undo)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => saveScene(true)}
+                      disabled={isScanning}
+                      className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 shadow-lg hover:shadow-indigo-200 transition-all border border-indigo-600"
+                    >
+                      📝 Save '{modelType.toUpperCase()}' as Draft
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => saveScene(false)}
+                    disabled={isScanning || !!draftedViews[modelType]}
+                    className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 shadow-lg hover:shadow-green-200 transition-all disabled:opacity-50"
+                  >
+                    ✅ Finalize & Save Scene ({modelType.toUpperCase()})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPreviewImage(null);
+                      setServerImageUrl(null);
+                      setPreviewHotspots([]);
+                      setCachedResults({yolo: [], dino: []});                    setDraftedViews({});                      setSceneStatus('');
+                      setSceneFile(null);
+                    }}
+                    className="text-sm text-gray-500 underline mt-2 hover:text-gray-700"
+                  >
+                      Discard & Start Over
+                  </button>
+                </div>
               </div>
             )}
           </div>

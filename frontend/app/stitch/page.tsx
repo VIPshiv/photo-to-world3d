@@ -401,8 +401,6 @@ export default function StitchPage() {
               {resultId && (
                 <Link
                   href={`/view/local?img=${resultId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-green-200 transition-all hover:-translate-y-0.5 flex items-center gap-2"
                 >
                   <span>👁️</span> View Result

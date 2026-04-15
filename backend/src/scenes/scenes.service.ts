@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
-import { HotspotType } from '@prisma/client';
+import { SceneStatus, HotspotType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -51,6 +51,192 @@ export class ScenesService {
       where: { id: sceneId },
       data: { status: 'LIVE' },
     });
+  }
+
+  async updateSceneStatus(sceneId: string, status: string) {
+    return this.prisma.scene.update({
+      where: { id: sceneId },
+      data: { status: status as SceneStatus },
+    });
+  }
+
+  async analyzeScene(
+    storeId: string,
+    file: Express.Multer.File,
+    title: string,
+    modelType: string,
+  ) {
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+    const filename = `scene_${Date.now()}_${file.originalname}`;
+    fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+    const imageUrl = `/uploads/${filename}`;
+
+    const storeProducts = await this.prisma.product.findMany({
+      where: { storeId },
+      select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
+    });
+
+    const allowedCategories = [
+      ...new Set(storeProducts.map((p) => p.category).filter(Boolean)),
+    ];
+
+    let detectedObjects: DetectedObject[] = [];
+    try {
+      detectedObjects = (await this.aiService.detectObjects(
+        file.buffer,
+        file.originalname,
+        allowedCategories as string[],
+        modelType
+      )) as unknown as DetectedObject[];
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('AI Detection failed', msg);
+    }
+
+    const hotspots = detectedObjects.map((obj) => {
+      let product = obj.product && obj.product.id 
+        ? storeProducts.find((p) => p.id === obj.product!.id) 
+        : undefined;
+
+      if (!product) {
+        product = storeProducts.find(
+          (p) =>
+            p.category?.toLowerCase() === obj.label.toLowerCase() ||
+            p.title.toLowerCase().includes(obj.label.toLowerCase()),
+        );
+      }
+
+      const yaw = obj.center.x * 360;
+      const pitch = (1 - obj.center.y) * 180 - 90;
+
+      return {
+        productId: product ? product.id : null,
+        yaw: yaw,
+        pitch: pitch,
+        label: product ? product.title : obj.label,
+        type: HotspotType.PRODUCT,
+        box: obj.box, // keep bounding box for plotting
+        product: product ? {
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          mainImageUrl: product.mainImageUrl,
+          description: product.description,
+          externalLink: product.externalLink
+        } : undefined
+      };
+    }).filter(Boolean);
+
+    return {
+      success: true,
+      imageUrl,
+      hotspots,
+      message: `Scanned with ${modelType}`,
+    };
+  }
+
+  async analyzeExistingScene(
+    storeId: string,
+    imageUrl: string,
+    modelType: string,
+  ) {
+    const filePath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
+    if (!fs.existsSync(filePath)) throw new Error('Image file not found on server');
+    
+    const buffer = fs.readFileSync(filePath);
+    const filename = path.basename(filePath);
+
+    const storeProducts = await this.prisma.product.findMany({
+      where: { storeId },
+      select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
+    });
+
+    const allowedCategories = [
+      ...new Set(storeProducts.map((p) => p.category).filter(Boolean)),
+    ];
+
+    let detectedObjects: DetectedObject[] = [];
+    try {
+      detectedObjects = (await this.aiService.detectObjects(
+        buffer,
+        filename,
+        allowedCategories as string[],
+        modelType
+      )) as unknown as DetectedObject[];
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`AI Detection failed for ${modelType}`, msg);
+    }
+
+    const hotspots = detectedObjects.map((obj) => {
+      let product = obj.product && obj.product.id 
+        ? storeProducts.find((p) => p.id === obj.product!.id) 
+        : undefined;
+
+      if (!product) {
+        product = storeProducts.find(
+          (p) =>
+            p.category?.toLowerCase() === obj.label.toLowerCase() ||
+            p.title.toLowerCase().includes(obj.label.toLowerCase()),
+        );
+      }
+
+      const yaw = obj.center.x * 360;
+      const pitch = (1 - obj.center.y) * 180 - 90;
+
+      return {
+        productId: product ? product.id : null,
+        yaw: yaw,
+        pitch: pitch,
+        label: product ? product.title : obj.label,
+        type: HotspotType.PRODUCT,
+        box: obj.box,
+        product: product ? {
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          mainImageUrl: product.mainImageUrl,
+          description: product.description,
+          externalLink: product.externalLink
+        } : undefined
+      };
+    }).filter(Boolean);
+
+    return {
+      success: true,
+      imageUrl,
+      hotspots,
+      message: `Scanned with ${modelType.toUpperCase()}`,
+    };
+  }
+
+  async createSceneWithHotspots(storeId: string, title: string, imageUrl: string, hotspots: any[], status: string = 'LIVE', modelType: string = 'yolo') {
+    const scene = await this.prisma.scene.create({
+      data: {
+        storeId,
+        title: title || 'Untitled Scene',
+        imageUrl: imageUrl,
+        status: status as SceneStatus,
+        modelType: modelType,
+      },
+    });
+
+    if (hotspots && hotspots.length > 0) {
+      await this.prisma.hotspot.createMany({
+        data: hotspots.map((h) => ({
+          sceneId: scene.id,
+          productId: h.productId,
+          yaw: h.yaw,
+          pitch: h.pitch,
+          label: h.label,
+          type: HotspotType.PRODUCT,
+        })),
+      });
+    }
+
+    return { success: true, sceneId: scene.id };
   }
 
   async processScene(
@@ -171,6 +357,49 @@ export class ScenesService {
     };
   }
 
+  async replaceLiveWithDraft(liveId: string, draftId: string) {
+    const draft = await this.prisma.scene.findUnique({
+      where: { id: draftId },
+      include: { hotspots: true }
+    });
+    if (!draft) throw new Error('Draft not found');
+
+    await this.prisma.hotspot.deleteMany({
+      where: { sceneId: liveId }
+    });
+
+    await this.prisma.scene.update({
+      where: { id: liveId },
+      data: {
+        modelType: draft.modelType,
+        title: draft.title
+      }
+    });
+
+    if (draft.hotspots.length > 0) {
+      await this.prisma.hotspot.createMany({
+        data: draft.hotspots.map(h => ({
+          sceneId: liveId,
+          productId: h.productId,
+          yaw: h.yaw,
+          pitch: h.pitch,
+          label: h.label,
+          type: HotspotType.PRODUCT
+        }))
+      });
+    }
+
+    await this.prisma.hotspot.deleteMany({
+      where: { sceneId: draftId }
+    });
+
+    await this.prisma.scene.delete({
+      where: { id: draftId }
+    });
+
+    return { success: true };
+  }
+
   async getSceneById(id: string) {
     return this.prisma.scene.findUnique({
       where: { id },
@@ -180,6 +409,19 @@ export class ScenesService {
         },
       },
     });
+  }
+
+  async deleteScene(id: string) {
+    // Delete hotspots first if Prisma doesn't have cascade delete configured automatically
+    await this.prisma.hotspot.deleteMany({
+      where: { sceneId: id },
+    });
+    
+    await this.prisma.scene.delete({
+      where: { id },
+    });
+
+    return { success: true };
   }
 
   async stitchScene(

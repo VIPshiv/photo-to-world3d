@@ -97,6 +97,7 @@ model Scene {
   imageUrl     String      // The 360 Panorama URL (Cloudinary/S3)
   thumbnailUrl String?
   status       SceneStatus @default(DRAFT)
+  modelType    String      @default("yolo") // yolo or dino
 
   // Basic metadata for the panorama
   initialYaw   Float    @default(0)

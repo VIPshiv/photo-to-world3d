@@ -6,6 +6,7 @@ import Link from 'next/link';
 export default function ViewScenesPage() {
   const [scenes, setScenes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'LIVE' | 'DRAFT'>('LIVE');
 
   useEffect(() => {
     const fetchScenes = async () => {
@@ -15,8 +16,7 @@ export default function ViewScenesPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          // Only show 'LIVE' scenes on the viewer gallery
-          setScenes(data.filter((s: any) => s.status === 'LIVE'));
+          setScenes(data);
         }
       } catch (err) {
         console.error(err);
@@ -26,6 +26,8 @@ export default function ViewScenesPage() {
     };
     fetchScenes();
   }, []);
+
+  const filteredScenes = scenes.filter(s => s.status === activeTab);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-black">
@@ -40,36 +42,54 @@ export default function ViewScenesPage() {
           </Link>
         </div>
 
+        <div className="flex gap-4 mb-6 border-b border-gray-200">
+          <button 
+            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'LIVE' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+            onClick={() => setActiveTab('LIVE')}
+          >
+            Live ({scenes.filter(s => s.status === 'LIVE').length})
+          </button>
+          <button 
+            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'DRAFT' ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+            onClick={() => setActiveTab('DRAFT')}
+          >
+            Drafts ({scenes.filter(s => s.status === 'DRAFT').length})
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center p-12 text-gray-500">Loading scenes...</div>
-        ) : scenes.length === 0 ? (
+        ) : filteredScenes.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
-            You don't have any Live scenes yet. Go create and finalize one!
+            You don't have any {activeTab.toLowerCase()} scenes right now.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scenes.map(scene => (
-              <Link href={`/view/${scene.id}`} key={scene.id} className="block group">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all cursor-pointer">
-                  <div className="aspect-video bg-gray-100 relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`http://localhost:3001${scene.imageUrl}`}
-                      alt={scene.title}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-md font-bold shadow">
-                      LIVE
-                    </div>
+            {filteredScenes.map(scene => (
+              <div key={scene.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all group">
+                <Link href={`/view/${scene.id}`} className="block relative aspect-video bg-gray-100 cursor-pointer overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`http://localhost:3001${scene.imageUrl}`}
+                    alt={scene.title}
+                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className={`absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-md font-bold shadow ${scene.status === 'LIVE' ? 'bg-green-500' : 'bg-orange-500'}`}>
+                    {scene.status}
                   </div>
-                  <div className="p-4">
-                    <h3 className="font-bold text-lg text-gray-900 mb-1">{scene.title}</h3>
+                </Link>
+                <div className="p-4 flex items-center justify-between gap-4">
+                  <div className="overflow-hidden">
+                    <h3 className="font-bold text-lg text-gray-900 mb-1 truncate">{scene.title}</h3>
                     <p className="text-sm text-gray-500">
                       {scene.hotspots?.length || 0} interactive objects
                     </p>
                   </div>
+                  <Link href={`/scenes/edit?highlight=${scene.id}`} className="shrink-0 px-3 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
+                    Edit
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

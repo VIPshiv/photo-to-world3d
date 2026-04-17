@@ -8,5 +8,7 @@ export function getApiBaseUrl() {
 }
 
 export function apiUrl(path: string) {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
   return `${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 }

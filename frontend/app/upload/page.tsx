@@ -631,7 +631,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => saveScene(true)}
                       disabled={isScanning}
-                      className="w-full bg-indigo-50/500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 shadow-lg hover:shadow-indigo-200 transition-all border border-indigo-600"
+                      className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 shadow-lg hover:shadow-indigo-200 transition-all border border-indigo-700"
                     >
                       📝 Save '{modelType.toUpperCase()}' as Draft
                     </button>

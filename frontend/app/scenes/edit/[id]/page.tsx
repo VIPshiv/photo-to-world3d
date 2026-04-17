@@ -317,7 +317,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
            {data.hotspots.length} items
          </div>
          <div className="w-full h-full bg-gray-900 relative">
-            <img src={data.imageUrl} alt={title} className="w-full h-full object-cover opacity-80" />
+            <img src={data.imageUrl ? apiUrl(data.imageUrl) : ''} alt={title} className="w-full h-full object-cover opacity-80" />
             {data.hotspots.map((hs, idx) => (
               <div key={idx} className="absolute w-2.5 h-2.5 bg-green-500 rounded-full border border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2" style={{ left: `${(hs.yaw / 360) * 100}%`, top: `${((90 - hs.pitch) / 180) * 100}%`}} />
             ))}
@@ -378,7 +378,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
                       <div key={p.id} className="group flex justify-between items-center p-2 cursor-default bg-white rounded-xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                         {p.imageUrl && (
                           <div className="w-10 h-10 rounded-lg overflow-hidden mr-2 flex-shrink-0 border border-gray-200 bg-gray-50 relative group-hover:scale-105 transition-transform duration-300">
-                            <img src={p.imageUrl.startsWith('http') ? p.imageUrl : apiUrl(`${p.imageUrl}`)} alt={p.title} className="w-full h-full object-cover" />
+                            <img src={apiUrl(p.imageUrl)} alt={p.title} className="w-full h-full object-cover" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0 pr-1">

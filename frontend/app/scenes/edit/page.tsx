@@ -299,7 +299,7 @@ function EditPageContent() {
                                  <div className="w-24 h-16 bg-gray-200 rounded-lg overflow-hidden relative shadow-sm shrink-0">
                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                    <img
-                                     src={apiUrl(`${liveScene.imageUrl}`)}
+                                     src={liveScene.imageUrl ? apiUrl(liveScene.imageUrl) : ''}
                                      alt={liveScene.title}
                                      className="w-full h-full object-cover"
                                    />
@@ -379,7 +379,7 @@ function EditPageContent() {
                                 <div className="w-24 h-16 bg-gray-200 rounded-lg overflow-hidden relative shadow-sm shrink-0">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={apiUrl(`${draftScene.imageUrl}`)}
+                                    src={draftScene.imageUrl ? apiUrl(draftScene.imageUrl) : ''}
                                     alt={draftScene.title}
                                     className="w-full h-full object-cover"
                                   />

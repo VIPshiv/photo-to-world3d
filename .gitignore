@@ -32,3 +32,8 @@ model/experimental/debug_match_*.jpg
 *.swp
 .DS_Store
 Thumbs.db
+
+# AI Models & Output
+*.pt
+runs/
+yolo_runs/

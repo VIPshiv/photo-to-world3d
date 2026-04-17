@@ -5,6 +5,7 @@ from src.detector import ObjectDetector
 from typing import Optional, List
 import io
 import json
+import os
 
 app = FastAPI(title='Smart360 AI Worker')
 
@@ -21,7 +22,7 @@ def refresh_product_embeddings():
     try:
         print("Refreshing Product Knowledge Base...")
         headers = {'x-mock-user-id': 'user-1'}
-        res = requests.get('http://localhost:3001/products', headers=headers)
+        res = requests.get(f'{os.environ.get("BACKEND_URL", "http://localhost:3001")}/products', headers=headers)
         if not res.ok: return
         
         products = res.json()
@@ -32,7 +33,7 @@ def refresh_product_embeddings():
             # If there's an image, we'll embed it for CLIP. If not, we just save the text info.
             embedding = None
             if prod.get('mainImageUrl'):
-                img_url = f"http://localhost:3001{prod['mainImageUrl']}"
+                img_url = f"{os.environ.get('BACKEND_URL', 'http://localhost:3001')}{prod['mainImageUrl']}"
                 try:
                     img_res = requests.get(img_url, timeout=5)
                     if img_res.status_code == 200:

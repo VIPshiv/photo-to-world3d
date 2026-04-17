@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { apiUrl } from "@/lib/api";
 
 function EditPageContent() {
   const [scenes, setScenes] = useState<any[]>([]);
@@ -51,7 +52,7 @@ function EditPageContent() {
 
   const fetchScenes = async () => {
     try {
-      const res = await fetch('http://localhost:3001/scenes/store/my-scenes', {
+      const res = await fetch(apiUrl('/scenes/store/my-scenes'), {
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
       if (res.ok) {
@@ -69,7 +70,7 @@ function EditPageContent() {
     if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
     
     try {
-      const res = await fetch(`http://localhost:3001/scenes/${id}`, {
+      const res = await fetch(apiUrl(`/scenes/${id}`), {
         method: 'DELETE',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
@@ -87,7 +88,7 @@ function EditPageContent() {
 
   const processPublish = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/scenes/${id}/status`, {
+      const res = await fetch(apiUrl(`/scenes/${id}/status`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -105,7 +106,7 @@ function EditPageContent() {
 
   const processUnpublish = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/scenes/${id}/status`, {
+      const res = await fetch(apiUrl(`/scenes/${id}/status`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -124,7 +125,7 @@ function EditPageContent() {
   const processPublishOverwrite = async (liveId: string, draftId: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:3001/scenes/${liveId}/replace-with-draft`, {
+      const res = await fetch(apiUrl(`/scenes/${liveId}/replace-with-draft`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -145,14 +146,14 @@ function EditPageContent() {
   const createDraftCopy = async (scene: any) => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:3001/scenes/save`, {
+      const res = await fetch(apiUrl(`/scenes/save`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'x-mock-user-id': localStorage.getItem('mockUserId') || '' 
         },
         body: JSON.stringify({ 
-          title: scene.title, 
+          title: `${scene.title} (Copy)`, 
           imageUrl: scene.imageUrl,
           modelType: scene.modelType || 'yolo',
           hotspots: scene.hotspots.map((h: any) => ({
@@ -178,7 +179,7 @@ function EditPageContent() {
   const createAlternateScan = async (scene: any, targetModelType: string = 'dino') => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:3001/scenes/analyze-existing`, {
+      const res = await fetch(apiUrl(`/scenes/analyze-existing`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -191,7 +192,7 @@ function EditPageContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        const saveRes = await fetch(`http://localhost:3001/scenes/save`, {
+        const saveRes = await fetch(apiUrl(`/scenes/save`), {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -250,22 +251,25 @@ function EditPageContent() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans text-black">
+    <div className="min-h-screen bg-[#e5e7eb] font-sans p-4 md:p-10 relative overflow-hidden">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Manage Scenes</h1>
-            <p className="text-gray-500 mt-1">Review drafts, manage active 3D scenes, and update hotspots.</p>
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white p-6 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-300 mb-10 flex-shrink-0">
+            <div>
+              <h1 className="text-3xl font-black text-black tracking-tight">Manage Scenes</h1>
+              <p className="text-slate-500 font-medium text-sm mt-1">Review drafts, manage active 3D scenes, and update hotspots.</p>
+            </div>
+            <div className="flex gap-3">
+              <Link href="/" className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-black transition-all hover:-translate-y-0.5 shadow-sm flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                Home
+              </Link>
+            </div>
           </div>
-          <Link href="/" className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
-            &larr; Back to Dashboard
-          </Link>
-        </div>
 
         {loading ? (
-          <div className="text-center p-12 text-gray-500">Loading scenes...</div>
+          <div className="text-center p-16 text-slate-500 font-bold tracking-tight animate-pulse">Loading scenes...</div>
         ) : groupedList.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
+          <div className="flex flex-col items-center justify-center p-16 bg-white/40 border border-dashed border-slate-200 rounded-[32px] text-slate-400 font-medium">
             No scenes found.
           </div>
         ) : (
@@ -282,11 +286,11 @@ function EditPageContent() {
                 const canMakeDAlt = dScenes.length === 0;
                 const canMakeYAlt = yScenes.length === 0;
               return (
-                <div key={key} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div key={key} className="bg-white/80 backdrop-blur-2xl p-8 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-500">
                   <div className="flex flex-col lg:flex-row gap-6">
                     {/* Live Scene Slot (Left) */}
-                    <div className="flex-1 w-full lg:w-1/2 border rounded-lg p-4 bg-gray-50 flex flex-col gap-4">
-                      <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Live Versions</h4>
+                    <div className="flex-1 w-full lg:w-1/2 border border-slate-200/60 rounded-[24px] p-6 bg-white/50 backdrop-blur-md flex flex-col gap-4">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wide border-b pb-2">Live Versions</h4>
                       {(lives && lives.length > 0) ? (
                         <div className="flex flex-col gap-6">
                            {lives.map((liveScene: any) => (
@@ -295,13 +299,13 @@ function EditPageContent() {
                                  <div className="w-24 h-16 bg-gray-200 rounded-lg overflow-hidden relative shadow-sm shrink-0">
                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                    <img
-                                     src={`http://localhost:3001${liveScene.imageUrl}`}
+                                     src={apiUrl(`${liveScene.imageUrl}`)}
                                      alt={liveScene.title}
                                      className="w-full h-full object-cover"
                                    />
                                  </div>
                                  <div className="overflow-hidden">
-                                   <h3 className="font-bold text-gray-900 truncate">{liveScene.title}</h3>
+                                   <h3 className="text-xl font-black text-black tracking-tight truncate">{liveScene.title}</h3>
                                    <div className="flex items-center gap-2 mt-1">    
                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">LIVE</span>
                                      {liveScene.modelType && (
@@ -309,10 +313,10 @@ function EditPageContent() {
                                          {liveScene.modelType.toLowerCase() === 'dino' ? 'D' : 'Y'}
                                        </span>
                                      )}
-                                     <span className="text-xs text-gray-500">{liveScene.hotspots?.length || 0} objects</span>
+                                     <span className="text-xs text-slate-400">{liveScene.hotspots?.length || 0} objects</span>
                                    </div>
                                    <div className="mt-2 flex items-center gap-2 text-xs">
-                                     <code className="bg-gray-100 text-gray-600 px-2 py-1 rounded truncate max-w-[150px] inline-block select-all" title={`${window.location?.origin}/view/${liveScene.id}`}>
+                                     <code className="bg-slate-100 text-slate-600 font-mono text-[10px] font-bold px-2 py-1 rounded truncate max-w-[150px] inline-block select-all" title={`${window.location?.origin}/view/${liveScene.id}`}>
                                        /view/{liveScene.id}
                                      </code>
                                      <button 
@@ -330,8 +334,13 @@ function EditPageContent() {
                                </div>
                                
                                <div className="flex gap-2 flex-wrap">
-                                 <Link
-                                   href={`/view/${liveScene.id}`}
+                                 <Link                                   href={`/scenes/edit/${liveScene.id}`}
+                                   className="text-blue-600 hover:text-blue-900 border border-current px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1 mr-2"
+                                 >
+                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                   Edit
+                                 </Link>
+                                 <Link                                    href={`/view/${liveScene.id}`}
                                    className="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"  
                                  >
                                    View 3D
@@ -360,8 +369,8 @@ function EditPageContent() {
                     </div>
 
                     {/* Draft Scene Slot (Right) */}
-                    <div className="flex-1 w-full lg:w-1/2 border rounded-lg p-4 bg-gray-50 flex flex-col gap-4">
-                      <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Draft Versions</h4>
+                    <div className="flex-1 w-full lg:w-1/2 border border-slate-200/60 rounded-[24px] p-6 bg-white/50 backdrop-blur-md flex flex-col gap-4">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wide border-b pb-2">Draft Versions</h4>
                       {(drafts && drafts.length > 0) ? (
                         <div className="flex flex-col gap-6">
                           {drafts.map((draftScene: any) => (
@@ -370,13 +379,13 @@ function EditPageContent() {
                                 <div className="w-24 h-16 bg-gray-200 rounded-lg overflow-hidden relative shadow-sm shrink-0">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={`http://localhost:3001${draftScene.imageUrl}`}
+                                    src={apiUrl(`${draftScene.imageUrl}`)}
                                     alt={draftScene.title}
                                     className="w-full h-full object-cover"
                                   />
                                 </div>
                                 <div className="overflow-hidden">
-                                  <h3 className="font-bold text-gray-900 truncate">{draftScene.title}</h3>
+                                  <h3 className="text-xl font-black text-black tracking-tight truncate">{draftScene.title}</h3>
                                   <div className="flex items-center gap-2 mt-1">    
                                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">DRAFT</span>
                                     {draftScene.modelType && (
@@ -384,10 +393,10 @@ function EditPageContent() {
                                         {draftScene.modelType.toLowerCase() === 'dino' ? 'D' : 'Y'}
                                       </span>
                                     )}
-                                    <span className="text-xs text-gray-500">{draftScene.hotspots?.length || 0} objects</span>
+                                    <span className="text-xs text-slate-400">{draftScene.hotspots?.length || 0} objects</span>
                                   </div>
                                   <div className="mt-2 flex items-center gap-2 text-xs">
-                                    <code className="bg-gray-100 text-gray-600 px-2 py-1 rounded truncate max-w-[150px] inline-block select-all" title={`${window.location?.origin}/view/${draftScene.id}`}>
+                                    <code className="bg-slate-100 text-slate-600 font-mono text-[10px] font-bold px-2 py-1 rounded truncate max-w-[150px] inline-block select-all" title={`${window.location?.origin}/view/${draftScene.id}`}>
                                       /view/{draftScene.id}
                                     </code>
                                     <button
@@ -405,8 +414,13 @@ function EditPageContent() {
                               </div>
                               
                               <div className="flex gap-2 flex-wrap">
-                                <Link
-                                  href={`/view/${draftScene.id}`}
+                                <Link                                  href={`/scenes/edit/${draftScene.id}`}
+                                  className="text-blue-600 hover:text-blue-900 border border-current px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1 mr-2"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                  Edit
+                                </Link>
+                                <Link                                   href={`/view/${draftScene.id}`}
                                   className="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"  
                                 >
                                   Preview 3D
@@ -436,7 +450,7 @@ function EditPageContent() {
                       {/* Display available creation options dynamically */}
                       {(canMakeYCopy || canMakeDCopy || canMakeDAlt || canMakeYAlt) && (
                         <div className={(drafts && drafts.length > 0) ? "mt-4 pt-4 border-t border-gray-200" : "flex flex-col items-center mt-2 w-full max-w-[250px] mx-auto"}>
-                          <h5 className={(drafts && drafts.length > 0) ? "text-xs font-bold text-gray-500 uppercase mb-3" : "hidden"}>Create Options</h5>
+                          <h5 className={(drafts && drafts.length > 0) ? "text-xs font-bold text-slate-400 uppercase mb-3" : "hidden"}>Create Options</h5>
                           <div className={(drafts && drafts.length > 0) ? "flex flex-col gap-2 w-full max-w-[250px]" : "flex flex-col gap-2 w-full"}>
                             {canMakeYCopy && yScenes[0] && (
                               <button
@@ -487,8 +501,8 @@ function EditPageContent() {
             <div className="bg-white rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-2xl relative">
               {modalConfig.type === 'PUBLISH_CONFLICT' && (
                 <>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Wait! Similar Scene is already LIVE</h3>
-                  <p className="text-gray-600 mb-4 text-sm">
+                  <h3 className="text-2xl font-bold text-black font-black tracking-tight mb-2">Wait! Similar Scene is already LIVE</h3>
+                  <p className="text-slate-500 mb-4 text-sm">
                     You are about to publish <strong>{modalConfig.targetScene?.title}</strong>, but another version of this exact imagery 
                     (<strong>{modalConfig.relatedScene?.title}</strong>) is already mapped and live on your site.
                   </p>
@@ -509,7 +523,7 @@ function EditPageContent() {
                         processPublishOverwrite(modalConfig.relatedScene?.id, modalConfig.targetScene?.id);
                         setModalConfig({ ...modalConfig, isOpen: false });      
                       }}
-                      className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-sm"
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/25 transition-all hover:-translate-y-0.5 px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm"
                     >
                       Replace LIVE Content (Keep Original URL)
                     </button>
@@ -528,13 +542,13 @@ function EditPageContent() {
                         processPublish(modalConfig.targetScene?.id);
                         setModalConfig({ ...modalConfig, isOpen: false });
                       }} 
-                      className="w-full bg-gray-100 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-200 shadow-sm"
+                      className="w-full bg-[#e5e7eb] text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-200 shadow-sm"
                     >
                       Publish Anyway (Keep both LIVE)
                     </button>
                     <button 
                       onClick={() => setModalConfig({ ...modalConfig, isOpen: false })} 
-                      className="mt-2 text-sm text-gray-500 hover:text-black font-semibold"
+                      className="mt-2 text-sm text-slate-400 hover:text-black font-semibold"
                     >
                       Cancel
                     </button>
@@ -544,8 +558,8 @@ function EditPageContent() {
 
               {modalConfig.type === 'REVERT_CONFLICT' && (
                 <>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Reverting {modalConfig.targetScene?.title}?</h3>
-                  <p className="text-gray-600 mb-4 text-sm">
+                  <h3 className="text-2xl font-bold text-black font-black tracking-tight mb-2">Reverting {modalConfig.targetScene?.title}?</h3>
+                  <p className="text-slate-500 mb-4 text-sm">
                     You are reverting the specific version you had LIVE. However, you also have 
                     an alternate draft (<strong>{modalConfig.relatedScene?.title}</strong>) built from the exact same image.
                   </p>
@@ -582,7 +596,7 @@ function EditPageContent() {
                     </button>
                     <button 
                       onClick={() => setModalConfig({ ...modalConfig, isOpen: false })} 
-                      className="mt-2 text-sm text-gray-500 hover:text-black font-semibold"
+                      className="mt-2 text-sm text-slate-400 hover:text-black font-semibold"
                     >
                       Cancel
                     </button>
@@ -600,7 +614,7 @@ function EditPageContent() {
 
 export default function EditScenesPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 p-8 text-center text-gray-500">Loading editor...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#e5e7eb] p-8 text-center text-slate-400">Loading editor...</div>}>
       <EditPageContent />
     </Suspense>
   );

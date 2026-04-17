@@ -1,6 +1,7 @@
 import SceneViewer from '@/components/viewer/SceneViewer';
 import BackButton from '@/components/viewer/BackButton';
 import Link from 'next/link';
+import { apiUrl } from "@/lib/api";
 
 // Next.js 16/15 types for params
 type Props = {
@@ -9,7 +10,7 @@ type Props = {
 
 async function getScene(id: string) {
   try {
-    const res = await fetch(`http://localhost:3001/scenes/${id}`, { 
+    const res = await fetch(apiUrl(`/scenes/${id}`), { 
       cache: 'no-store' 
     });
     if (!res.ok) return null;
@@ -33,7 +34,7 @@ export default async function ViewScenePage({ params }: Props) {
   }
 
   // Construct full URL for the image
-  const imageUrl = `http://localhost:3001${scene.imageUrl}`;
+  const imageUrl = apiUrl(`${scene.imageUrl}`);
   console.log('Loading Scene:', imageUrl);
 
   return (
@@ -42,13 +43,13 @@ export default async function ViewScenePage({ params }: Props) {
         <div className="absolute top-4 left-4 z-20">
             <div className="bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-100 max-w-sm transition-all hover:bg-white">
                 <div className="flex justify-between items-start mb-2">
-                    <h1 className="text-gray-900 font-bold text-lg truncate pr-4">{scene.title || 'Untitled Scene'}</h1>
+                    <h1 className="text-black font-black tracking-tight font-bold text-lg truncate pr-4">{scene.title || 'Untitled Scene'}</h1>
                     <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider">
                         3D View
                     </span>
                 </div>
                 
-                <div className="flex items-center text-sm text-gray-500 mb-4">
+                <div className="flex items-center text-sm text-slate-400 mb-4">
                     <div className="flex -space-x-1 mr-2">
                          {/* Simple visual indicator for hotspots */}
                          {[...Array(Math.min(3, scene.hotspots.length))].map((_,i) => (

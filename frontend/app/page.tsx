@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -32,26 +31,29 @@ export default function Home() {
 
   if (!currentUser) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 dark:bg-zinc-900 text-center p-4">
-        <h1 className="text-4xl font-bold mb-2 dark:text-white">Welcome to Smart360</h1>
-        <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-md">
-          Select a mock user to continue
-        </p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#e5e7eb] font-sans p-4 relative">      
+        
+        <div className="bg-white/80 backdrop-blur-2xl p-10 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 w-full max-w-sm text-center">
+          <h1 className="text-3xl font-black text-black tracking-tight mb-2">Welcome</h1>
+          <p className="text-sm font-medium text-slate-500 mb-8">
+            Select a mock user to continue
+          </p>
 
-        <div className="flex flex-col gap-4 w-full max-w-sm">
-          {MOCK_USERS.map(user => (
-            <button
-              key={user.id}
-              onClick={() => login(user.id)}
-              className="flex items-center justify-between p-4 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg hover:shadow-md transition-shadow"
-            >
-              <div className="text-left">
-                <div className="font-semibold text-gray-900 dark:text-white">{user.name}</div>
-                <div className="text-sm text-gray-500">{user.role}</div>
-              </div>
-              <div className="text-indigo-600 dark:text-indigo-400 font-medium">Log in &rarr;</div>
-            </button>
-          ))}
+          <div className="flex flex-col gap-4">
+            {MOCK_USERS.map(user => (
+              <button
+                key={user.id}
+                onClick={() => login(user.id)}
+                className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group text-left"
+              >
+                <div>
+                  <div className="font-bold text-slate-800 tracking-tight">{user.name}</div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{user.role}</div>       
+                </div>
+                <div className="text-indigo-600 font-bold bg-indigo-50 w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">&rarr;</div>  
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -60,46 +62,61 @@ export default function Home() {
   const activeUser = MOCK_USERS.find(u => u.id === currentUser);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 dark:bg-zinc-900 text-center p-4">
-      <div className="absolute top-4 right-4 bg-white dark:bg-zinc-800 px-4 py-2 rounded-full shadow border border-gray-200 dark:border-zinc-700 flex items-center gap-4">
-        <span className="text-sm text-gray-600 dark:text-gray-300">
-          Logged in as <b>{activeUser?.name}</b>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#e5e7eb] font-sans p-4 relative">        
+      
+      {/* Top Bar Status */}
+      <div className="absolute top-6 right-6 bg-white/80 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center gap-4">
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+          Logged in as <b className="text-indigo-600 font-black ml-1">{activeUser?.name}</b>
         </span>
-        <button onClick={logout} className="text-sm text-red-500 hover:text-red-700 font-medium">
+        <div className="w-px h-4 bg-slate-200"></div>
+        <button onClick={logout} className="text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors">
           Logout
         </button>
       </div>
 
-      <h1 className="text-4xl font-bold mb-4 dark:text-white">Smart360 Dashboard</h1>
-      <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-md">
-        Turn your 360 photos into interactive virtual stores with AI-powered tagging.
-      </p>
-      
-<div className="flex flex-col items-center gap-6 w-full max-w-md mt-6">
-        
+      <div className="text-center mb-10 mt-16">
+        <h1 className="text-4xl md:text-5xl font-black text-black tracking-tight mb-4">Smart360 Dashboard</h1>
+        <p className="text-base md:text-lg font-medium text-slate-500 max-w-lg mx-auto">       
+          Turn your 360 photos into interactive virtual stores with AI-powered tagging.
+        </p>
+      </div>
+
+      <div className="flex flex-col items-center justify-center gap-5 w-full max-w-md relative z-10">
+
         {/* Button 1: Create Scene */}
-        <div className="w-full">
+        <div className="w-full flex flex-col gap-4">
           <button
             onClick={() => setShowCreateOptions(!showCreateOptions)}
-            className="w-full px-6 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold shadow-md text-lg flex items-center justify-between"
+            className="w-full px-6 py-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:shadow-indigo-500/25 transition-all hover:-translate-y-1 rounded-[24px] font-black text-lg tracking-tight flex items-center justify-between group"
           >
-            <span>Create a Scene</span>
-            <span className={`transform transition-transform ${showCreateOptions ? 'rotate-180' : ''}`}>▼</span>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none group-hover:scale-110 transition-transform">✨</span> Create a Scene
+            </div>
+            <svg className={`w-6 h-6 transform transition-transform duration-300 opacity-80 ${showCreateOptions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
           </button>
-          
+
           {showCreateOptions && (
-            <div className="flex flex-col gap-3 mt-3 w-full animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
               <Link
                 href="/stitch"
-                className="px-6 py-3 bg-white text-indigo-700 border-2 border-indigo-100 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition font-semibold shadow-sm w-full block text-center"
+                className="w-full px-6 py-4 bg-white/80 backdrop-blur-2xl text-slate-800 border border-white/60 hover:border-indigo-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all hover:-translate-y-1 rounded-[20px] font-bold text-base flex items-center justify-between group"
               >
-                1. Create Panorama
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">1</div>
+                    Create Panorama
+                </div>
+                <div className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all">&rarr;</div>
               </Link>
               <Link
                 href="/upload"
-                className="px-6 py-3 bg-white text-indigo-700 border-2 border-indigo-100 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition font-semibold shadow-sm w-full block text-center"
+                className="w-full px-6 py-4 bg-white/80 backdrop-blur-2xl text-slate-800 border border-white/60 hover:border-indigo-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all hover:-translate-y-1 rounded-[20px] font-bold text-base flex items-center justify-between group"
               >
-                2. Upload Scene (Objects)
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">2</div>
+                    Upload Objects
+                </div>
+                <div className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all">&rarr;</div>
               </Link>
             </div>
           )}
@@ -108,17 +125,23 @@ export default function Home() {
         {/* Button 2: Edit Live Scenes */}
         <Link
           href="/scenes/edit"
-          className="w-full px-6 py-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-bold shadow-md text-lg block text-center"
+          className="w-full px-6 py-5 bg-black text-white hover:shadow-xl hover:shadow-black/25 transition-all hover:-translate-y-1 rounded-[24px] font-black text-lg tracking-tight flex items-center justify-between group"
         >
-          Edit Live Scenes
+          <div className="flex items-center gap-3">
+            <span className="text-2xl leading-none group-hover:scale-110 transition-transform">🏗️</span> Edit Live Scenes
+          </div>
+          <div className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">&rarr;</div>
         </Link>
 
         {/* Button 3: View Scenes */}
         <Link
           href="/scenes/view"
-          className="w-full px-6 py-4 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition font-bold shadow-md text-lg block text-center"
+          className="w-full px-6 py-5 bg-white/80 backdrop-blur-2xl text-slate-800 border border-white/60 hover:border-indigo-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all hover:-translate-y-1 rounded-[24px] font-black text-lg tracking-tight flex items-center justify-between group"
         >
-          View Scenes
+          <div className="flex items-center gap-3">
+            <span className="text-2xl leading-none group-hover:scale-110 transition-transform">👁️</span> View Scenes
+          </div>
+          <div className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-indigo-600">&rarr;</div>
         </Link>
 
       </div>

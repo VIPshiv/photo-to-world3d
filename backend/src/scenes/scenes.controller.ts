@@ -125,6 +125,17 @@ export class ScenesController {
     return scene;
   }
 
+  @Post(':id')
+  async updateScene(
+    @Param('id') id: string,
+    @Body() body: { title?: string, imageUrl?: string, hotspots?: any[], status?: string, modelType?: string },
+    @CurrentUser() user: any
+  ) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+    return this.scenesService.updateScene(id, body);
+  }
+
   @Post(':id/finalize')
   async finalizeScene(@Param('id') id: string) {
     const scene = await this.scenesService.getSceneById(id);

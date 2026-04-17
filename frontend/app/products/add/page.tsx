@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { apiUrl } from "@/lib/api";
 
 // Common YOLOv8 Categories (Indoor/Furniture)
 const AI_CATEGORIES = [
@@ -30,7 +31,7 @@ export default function AddProductPage() {
 
     try {
       // 1. Create Product
-      const productRes = await fetch('http://localhost:3001/products', {
+      const productRes = await fetch(apiUrl('/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -50,7 +51,7 @@ export default function AddProductPage() {
         const formData = new FormData();
         formData.append('file', file);
         
-        const imageRes = await fetch(`http://localhost:3001/products/${product.id}/image`, {
+        const imageRes = await fetch(apiUrl(`/products/${product.id}/image`), {
           method: 'POST',
           body: formData,
         });

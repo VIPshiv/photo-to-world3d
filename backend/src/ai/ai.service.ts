@@ -4,7 +4,7 @@ const FormData = require('form-data');
 
 @Injectable()
 export class AiService {
-  private readonly aiWorkerUrl = 'http://localhost:8000'; // Config this in env later
+  private readonly aiWorkerUrl = process.env.AI_WORKER_URL || 'http://localhost:8000';
 
   async detectObjects(
     imageBuffer: Buffer,

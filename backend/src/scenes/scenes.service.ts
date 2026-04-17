@@ -411,6 +411,38 @@ export class ScenesService {
     });
   }
 
+  async updateScene(id: string, data: { title?: string, imageUrl?: string, hotspots?: any[], status?: string, modelType?: string }) {
+    await this.prisma.$transaction(async (tx) => {
+      const updateData: any = {};
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.modelType !== undefined) updateData.modelType = data.modelType;
+
+      await tx.scene.update({
+        where: { id },
+        data: updateData,
+      });
+
+      if (data.hotspots) {
+        await tx.hotspot.deleteMany({ where: { sceneId: id } });
+        if (data.hotspots.length > 0) {
+          await tx.hotspot.createMany({
+            data: data.hotspots.map((h) => ({
+              sceneId: id,
+              productId: h.productId,
+              yaw: h.yaw,
+              pitch: h.pitch,
+              label: h.label,
+              type: 'PRODUCT',
+            })),
+          });
+        }
+      }
+    });
+    return { success: true, sceneId: id };
+  }
+
   async deleteScene(id: string) {
     // Delete hotspots first if Prisma doesn't have cascade delete configured automatically
     await this.prisma.hotspot.deleteMany({
@@ -468,25 +500,25 @@ export class ScenesService {
 
     if (mode === 'cubemap') {
       console.log(
-        '[Stitch Service] Mode: CUBEMAP -> Using stitch_prototype.py',
+        '[Stitch Service] Mode: CUBEMAP -> Using cubemap.py',
       );
       scriptPath = path.join(
         process.cwd(),
         '..',
         'model',
-        'experimental',
-        'stitch_prototype.py',
+        'techniques',
+        'cubemap.py',
       );
       // Prototype script takes input DIRECTORY
       command = `python "${scriptPath}" "${sessionDir}" --out "${outputPath}"`;
     } else {
-      console.log('[Stitch Service] Mode: GUIDED -> Using stitch_feature.py');
+      console.log('[Stitch Service] Mode: GUIDED -> Using guided_feature.py');
       scriptPath = path.join(
         process.cwd(),
         '..',
         'model',
-        'experimental',
-        'stitch_feature.py',
+        'techniques',
+        'guided_feature.py',
       );
       // Feature script takes list of FILES
       const args = `"${filePaths.join('" "')}"`;

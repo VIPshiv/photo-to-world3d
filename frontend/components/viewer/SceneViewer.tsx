@@ -23,7 +23,7 @@ interface Hotspot {
   };
 }
 
-export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
+export default function SceneViewer({ imageUrl, hotspots, height = '100vh' }: SceneProps & { height?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedHotspot, setSelectedHotspot] = useState<Hotspot | null>(null);
   
@@ -221,7 +221,7 @@ export default function SceneViewer({ imageUrl, hotspots }: SceneProps) {
   }, [imageUrl, hotspots]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', touchAction: 'none' }}>
+    <div style={{ position: 'relative', width: '100%', height, overflow: 'hidden', touchAction: 'none' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       
       {selectedHotspot && (

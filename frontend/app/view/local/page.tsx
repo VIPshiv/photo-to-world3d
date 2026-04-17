@@ -3,6 +3,7 @@ import { useSearchParams } from 'next/navigation';
 import SceneViewer from '@/components/viewer/SceneViewer';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
+import { apiUrl } from "@/lib/api";
 
 function LocalViewContent() {
   const searchParams = useSearchParams();
@@ -31,7 +32,7 @@ function LocalViewContent() {
   }
 
   // Construct full URL pointing to Nest.js static uploads
-  const fullImageUrl = `http://localhost:3001${imgPath}`;
+  const fullImageUrl = apiUrl(`${imgPath}`);
 
   return (
     <div className="relative w-full h-screen bg-black">
@@ -39,12 +40,12 @@ function LocalViewContent() {
       <div className="absolute top-4 left-4 z-20">
           <div className="bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-100 max-w-sm">
               <div className="flex justify-between items-start mb-2">
-                  <h1 className="text-gray-900 font-bold text-lg truncate pr-4">Test Panorama</h1>
+                  <h1 className="text-black font-black tracking-tight font-bold text-lg truncate pr-4">Test Panorama</h1>
                   <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider">
                       Local Mode
                   </span>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Viewing locally stitched image. Not saved to database.</p>
+              <p className="text-sm text-slate-400 mb-4">Viewing locally stitched image. Not saved to database.</p>
 
               <button
                 onClick={() => {

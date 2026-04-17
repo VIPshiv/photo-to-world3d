@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { apiUrl } from "@/lib/api";
 
 // Common YOLOv8 Categories (Indoor/Furniture)
 const AI_CATEGORIES = [
@@ -50,7 +51,7 @@ export default function DashboardPage() {
   // --- Fetch Products on Load ---
   const fetchProducts = async () => {
     try {
-      const res = await fetch('http://localhost:3001/products', {
+      const res = await fetch(apiUrl('/products'), {
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
       if (res.ok) {
@@ -84,7 +85,7 @@ export default function DashboardPage() {
 
     try {
       // 1. Create Product
-      const productRes = await fetch('http://localhost:3001/products', {
+      const productRes = await fetch(apiUrl('/products'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -107,7 +108,7 @@ export default function DashboardPage() {
         const formData = new FormData();
         formData.append('file', prodFile);
         
-        await fetch(`http://localhost:3001/products/${product.id}/image`, {
+        await fetch(apiUrl(`/products/${product.id}/image`), {
           method: 'POST',
           headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
           body: formData,
@@ -139,7 +140,7 @@ export default function DashboardPage() {
     formData.append('modelType', modelType);
 
     try {
-      const res = await fetch('http://localhost:3001/scenes/analyze', {
+      const res = await fetch(apiUrl('/scenes/analyze'), {
         method: 'POST',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
         body: formData,
@@ -153,7 +154,7 @@ export default function DashboardPage() {
         const newCache = { ...cachedResults, [modelType]: data.hotspots };
         setCachedResults(newCache);
         setServerImageUrl(data.imageUrl); // Store raw path for backend
-        setPreviewImage(`http://localhost:3001${data.imageUrl}`);
+        setPreviewImage(apiUrl(`${data.imageUrl}`));
         setPreviewHotspots(data.hotspots);
 
       } else {
@@ -177,7 +178,7 @@ export default function DashboardPage() {
       setSceneStatus(`Running ${type.toUpperCase()}... (This may take a moment)`);
       setIsScanning(true);
       try {
-        const res = await fetch('http://localhost:3001/scenes/analyze-existing', {
+        const res = await fetch(apiUrl('/scenes/analyze-existing'), {
           method: 'POST',
           headers: { 
             'x-mock-user-id': localStorage.getItem('mockUserId') || '',
@@ -218,7 +219,7 @@ export default function DashboardPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:3001/scenes/save', {
+      const res = await fetch(apiUrl('/scenes/save'), {
         method: 'POST',
         headers: { 
           'x-mock-user-id': localStorage.getItem('mockUserId') || '',
@@ -257,7 +258,7 @@ export default function DashboardPage() {
     if (!draftId) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/scenes/${draftId}`, { 
+      const res = await fetch(apiUrl(`/scenes/${draftId}`), { 
         method: 'DELETE',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
@@ -275,7 +276,7 @@ export default function DashboardPage() {
   const deleteProduct = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
     try {
-      await fetch(`http://localhost:3001/products/${id}`, { 
+      await fetch(apiUrl(`/products/${id}`), { 
         method: 'DELETE',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
@@ -288,7 +289,7 @@ export default function DashboardPage() {
   const finalizeScene = async () => {
     if (!sceneId) return;
     try {
-      const res = await fetch(`http://localhost:3001/scenes/${sceneId}/finalize`, {
+      const res = await fetch(apiUrl(`/scenes/${sceneId}/finalize`), {
         method: 'POST',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
@@ -306,48 +307,51 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-black font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-[#e5e7eb] font-sans p-4 md:p-10 relative overflow-hidden">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-10">
+        <div className="flex justify-between items-center bg-white p-6 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-300 mb-10 flex-shrink-0">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Upload Scene</h1>
-              <p className="text-gray-500 mt-1">Manage your inventory and create new 3D experiences.</p>
+              <h1 className="text-3xl font-black text-black tracking-tight">Upload Scene</h1>
+              <p className="text-slate-500 font-medium text-sm mt-1">Manage your inventory and create new 3D experiences.</p>
             </div>
-            <Link href="/" className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-black transition-colors">
-                &larr; Back to Home
-            </Link>
-        </div>
+            <div className="flex gap-3">
+              <Link href="/" className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-black transition-all hover:-translate-y-0.5 shadow-sm flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                Home
+              </Link>
+            </div>
+          </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
           {/* --- LEFT COLUMN: INVENTORY --- */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-            <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+          <div className="bg-white/80 backdrop-blur-2xl p-10 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+            <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
                <span className="text-2xl">📦</span>
-               <h2 className="text-xl font-bold text-gray-900">1. Build Inventory</h2>
+               <h2 className="text-xl font-bold text-black">1. Build Inventory</h2>
             </div>
             
             <div className="mb-8">
               <div className="flex justify-between items-end mb-3">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Current Items</h3>
-                 <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{products.length} items</span>
+                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Items</h3>
+                 <span className="text-xs bg-gray-100 text-slate-500 px-2 py-1 rounded-full">{products.length} items</span>
               </div>
               
-              <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-xl bg-gray-50/50 p-2 text-sm custom-scrollbar">
+              <div className="max-h-[350px] overflow-y-auto border border-slate-100/50 rounded-3xl bg-slate-50/50 p-3 text-sm custom-scrollbar">
                 {products.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                  <div className="flex flex-col items-center justify-center py-16 bg-white/40 border border-dashed border-slate-200 rounded-3xl text-slate-400 font-medium">
                      <span className="text-xl mb-1">📭</span>
                      <p>Inventory is empty</p>
                   </div>
                 ) : (
                   products.map(p => (
-                    <div key={p.id} className="group flex justify-between items-center p-3 mb-2 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-all last:mb-0">
+                    <div key={p.id} className="group flex justify-between items-center p-4 mb-3 bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 last:mb-0">
                       <div className="flex-1">
-                          <div className="font-semibold text-gray-800">{p.title}</div>
+                          <div className="font-bold text-slate-800">{p.title}</div>
                           <div className="flex items-center gap-2 mt-1">
-                             <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{p.category}</span>
-                             {p.price > 0 && <span className="text-xs text-gray-500">₹{p.price}</span>}
+                             <span className="text-xs font-medium text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">{p.category}</span>
+                             {p.price > 0 && <span className="text-xs text-slate-400">₹{p.price}</span>}
                           </div>
                       </div>
                       <button 
@@ -363,41 +367,41 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <form onSubmit={handleProductSubmit} className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <form onSubmit={handleProductSubmit} className="bg-white/50 backdrop-blur-lg p-6 rounded-2xl border border-white/60 hover:shadow-md transition-shadow">
+              <h3 className="font-black tracking-tight text-xl text-black mb-5 flex items-center gap-3">
                 <span className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs">＋</span>
                 Add New Item
               </h3>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Product Name</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Product Name</label>
                   <input 
                     type="text" 
                     value={prodTitle}
                     onChange={e => setProdTitle(e.target.value)}
                     placeholder="e.g. Leather Sofa"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Price (₹)</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Price (₹)</label>
                     <input 
                       type="number" 
                       value={prodPrice}
                       onChange={e => setProdPrice(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:ring-2 focus:ring-green-500 outline-none"
+                      className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
                     <select 
                       value={prodCategory}
                       onChange={e => setProdCategory(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:ring-2 focus:ring-green-500 outline-none appearance-none"
+                      className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                     >
                       {AI_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -405,23 +409,23 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">External Link / Action URL</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">External Link / Action URL</label>
                   <input
                     type="url"
                     value={prodLink}
                     onChange={e => setProdLink(e.target.value)}
                     placeholder="https://example.com/product/123"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   />
                 </div>
 
                 <div>
-                   <label className="block text-xs font-medium text-gray-500 mb-1">Product Image (Optional)</label>
+                   <label className="block text-xs font-medium text-slate-400 mb-1">Product Image (Optional)</label>
                    <input 
                     type="file" 
                     accept="image/*"
                     onChange={e => setProdFile(e.target.files?.[0] || null)}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                   />
                 </div>
 
@@ -442,30 +446,30 @@ export default function DashboardPage() {
           </div>
 
           {/* --- RIGHT COLUMN: SCENE UPLOAD --- */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 h-fit">
-            <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 h-fit">
+            <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
                <span className="text-2xl">📸</span>
-               <h2 className="text-xl font-bold text-gray-900">2. Upload Scene</h2>
+               <h2 className="text-xl font-bold text-black">2. Upload Scene</h2>
             </div>
             
-            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
               Upload your 360° panorama. Our AI will scan the image and automatically tag any inventory items it recognizes.
             </p>
 
             <form onSubmit={handleSceneAnalyze} className="space-y-6">
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Scene Title</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Scene Title</label>
                 <input 
                   type="text" 
                   value={sceneTitle}
                   onChange={e => setSceneTitle(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-black bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-black bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
                   placeholder="e.g. My Living Room"
                 />
               </div>
 
               <div className="relative group">
-                <div className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${sceneFile ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}>
+                <div className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${sceneFile ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50/50'}`}>
                   <input 
                     type="file" 
                     accept=".jpg,.jpeg,.png"
@@ -476,20 +480,20 @@ export default function DashboardPage() {
                      <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-xl">
                         {sceneFile ? '📎' : '☁️'}
                      </div>
-                     <div className="text-sm font-medium text-gray-900">
+                     <div className="text-sm font-medium text-black">
                         {sceneFile ? sceneFile.name : (sceneId ? 'Using Draft Image. Click to change.' : 'Click to Upload Panorama')}
                      </div>
-                     {!sceneFile && <div className="text-xs text-gray-500">Supports JPG, PNG (2:1 Ratio)</div>}
+                     {!sceneFile && <div className="text-xs text-slate-400">Supports JPG, PNG (2:1 Ratio)</div>}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Select AI Model</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Select AI Model</label>
                 <select 
                   value={modelType}
                   onChange={e => setModelType(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-black bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-black bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
                 >
                   <option value="yolo">🚀 Fast Scan (YOLO + CLIP)</option>
                   <option value="dino">🧠 Deep Text Search (Grounding DINO)</option>
@@ -534,7 +538,7 @@ export default function DashboardPage() {
                           sessionStorage.removeItem('draftSceneId');
                           sessionStorage.removeItem('draftHotspotCount');
                         }}
-                        className="text-sm text-gray-500 underline mb-2 hover:text-gray-700"
+                        className="text-sm text-slate-400 underline mb-2 hover:text-slate-700"
                       >
                          Cancel & Upload A Different Scene
                       </button>
@@ -558,8 +562,8 @@ export default function DashboardPage() {
 
             {/* NEW AI PREVIEW UI */}
             {previewImage && (
-              <div className="mt-8 animate-fade-in bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center shadow-inner">
-                <h3 className="font-bold text-lg text-gray-800 mb-4">Preview AI Results</h3>
+              <div className="mt-8 animate-fade-in bg-slate-50/50 border border-slate-100 rounded-2xl p-6 text-center shadow-inner">
+                <h3 className="font-bold text-lg text-slate-800 mb-4">Preview AI Results</h3>
                 
                 {/* Model Toggle Buttons */}
                 <div className="flex justify-center gap-4 mb-6">
@@ -567,7 +571,7 @@ export default function DashboardPage() {
                     type="button"
                     disabled={isScanning}
                     onClick={() => handleModelSwitch('yolo')}
-                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'yolo' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'yolo' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-gray-100'}`}
                   >
                     Show YOLO Fast Scan
                   </button>
@@ -575,14 +579,14 @@ export default function DashboardPage() {
                     type="button"
                     disabled={isScanning}
                     onClick={() => handleModelSwitch('dino')}
-                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'dino' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'}`}
+                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${modelType === 'dino' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-gray-100'}`}
                   >
                     Show Grounding DINO
                   </button>
                 </div>
 
                 {/* Image Preview with overlay markers */}
-                <div className="relative w-full aspect-[2/1] bg-black rounded-lg overflow-hidden border border-gray-300 mb-6">
+                <div className="relative w-full aspect-[2/1] bg-black rounded-lg overflow-hidden border border-slate-200 mb-6">
                   <img src={previewImage} alt="Scene Preview" className="w-full h-full object-cover opacity-80" />
                   {previewHotspots && previewHotspots.map((hs, idx) => (
                     <div 
@@ -600,7 +604,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                <p className="text-gray-600 text-sm mb-6">
+                <p className="text-slate-500 text-sm mb-6">
                   Showing <strong>{previewHotspots ? previewHotspots.length : 0}</strong> items detected by {modelType.toUpperCase()}.
                 </p>
 
@@ -610,7 +614,7 @@ export default function DashboardPage() {
                       sessionStorage.setItem('previewHotspots', JSON.stringify(previewHotspots));
                       window.open(`/view/local?img=${serverImageUrl}`, '_blank');
                     }}
-                    className="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-indigo-50/50 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 transition-all flex items-center justify-center gap-2"
                   >
                     👁️ Test in 3D Viewer Before Saving
                   </button>
@@ -619,7 +623,7 @@ export default function DashboardPage() {
                     <button
                       onClick={undoDraft}
                       disabled={isScanning}
-                      className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 shadow-sm transition-all"
+                      className="w-full bg-gray-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-gray-300 shadow-sm transition-all"
                     >
                       ⏪ Saved as Draft! (Undo)
                     </button>
@@ -627,7 +631,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => saveScene(true)}
                       disabled={isScanning}
-                      className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 shadow-lg hover:shadow-indigo-200 transition-all border border-indigo-600"
+                      className="w-full bg-indigo-50/500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 shadow-lg hover:shadow-indigo-200 transition-all border border-indigo-600"
                     >
                       📝 Save '{modelType.toUpperCase()}' as Draft
                     </button>
@@ -648,7 +652,7 @@ export default function DashboardPage() {
                       setCachedResults({yolo: [], dino: []});                    setDraftedViews({});                      setSceneStatus('');
                       setSceneFile(null);
                     }}
-                    className="text-sm text-gray-500 underline mt-2 hover:text-gray-700"
+                    className="text-sm text-slate-400 underline mt-2 hover:text-slate-700"
                   >
                       Discard & Start Over
                   </button>

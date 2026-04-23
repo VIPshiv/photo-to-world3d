@@ -21,8 +21,8 @@ def refresh_product_embeddings():
     global product_embeddings_cache
     try:
         print("Refreshing Product Knowledge Base...")
-        headers = {'x-mock-user-id': 'user-1'}
-        res = requests.get(f'{os.environ.get("BACKEND_URL", "http://localhost:3001")}/products', headers=headers)
+        headers = {'x-mock-user-id': 'user-1'} # Just for passing the basic auth check
+        res = requests.get(f'{os.environ.get("BACKEND_URL", "http://localhost:3001")}/products/all', headers=headers)
         if not res.ok: return
         
         products = res.json()
@@ -46,6 +46,8 @@ def refresh_product_embeddings():
                 
             new_cache.append({
                 'id': prod['id'],
+                'storeId': prod.get('storeId'),
+                'sceneId': prod.get('sceneId'),
                 'title': prod['title'], 
                 'category': prod['category'],
                 'embedding': embedding
@@ -69,28 +71,45 @@ def trigger_refresh():
 async def detect_objects(
     file: UploadFile = File(...), 
     classes: Optional[str] = Form(None),
-    model_type: str = Form("yolo")
+    model_type: str = Form("yolo"),
+    storeId: Optional[str] = Form(None),
+    sceneId: Optional[str] = Form(None)
 ):
-    print(f"Processing Scene: {file.filename} [Model: {model_type.upper()}]")
+    print(f"Processing Scene: {file.filename} [Model: {model_type.upper()}] [Store: {storeId}] [Scene: {sceneId}]")
     
     # 1. Ensure we have the latest product vectors
     if not product_embeddings_cache:
         refresh_product_embeddings()
+
+    # Filter cache strictly to the requesting user's store
+    active_cache = [p for p in product_embeddings_cache if p['storeId'] == storeId] if storeId else product_embeddings_cache
+    
+    # If explicitly requested, filter down to the specific scene
+    if sceneId:
+        active_cache = [p for p in active_cache if p.get('sceneId') == sceneId]
+
+    print(f"Matched {len(active_cache)} products for Store={storeId}, Scene={sceneId}")
 
     contents = await file.read()
     
     try:
         if model_type.lower() == 'dino':
             print("Running Deep Text Search (Grounding DINO)...")
-            results = detector.detect_with_dino(contents, product_embeddings_cache)
-        elif len(product_embeddings_cache) > 0:
+            results = detector.detect_with_dino(contents, active_cache)
+        elif len(active_cache) > 0:
             # ADVANCED MODE: Visual Search (CLIP)
             print("Running Visual Match (CLIP)...")
-            results = detector.detect_best_matches(contents, product_embeddings_cache)
+            results = detector.detect_best_matches(contents, active_cache)
         else:
             # FALLBACK: Basic YOLO
-            print("No product images found. Falling back to basic YOLO detection.")
-            allowed_list = [c.strip() for c in classes.split(',')] if classes else None
+            print("No product images found for this store. Falling back to basic YOLO detection.")
+            if classes is not None:
+                if classes == '__EMPTY__':
+                    allowed_list = []
+                else:
+                    allowed_list = [c.strip() for c in classes.split(',')] if classes.strip() else []
+            else:
+                allowed_list = None
             results = detector.detect_from_image(contents, allowed_classes=allowed_list)
 
         return {

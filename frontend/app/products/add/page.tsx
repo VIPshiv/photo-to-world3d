@@ -4,26 +4,90 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { apiUrl } from "@/lib/api";
 
-// Common YOLOv8 Categories (Indoor/Furniture)
-const AI_CATEGORIES = [
-  'chair', 'couch', 'potted plant', 'bed', 'dining table', 
-  'toilet', 'tv', 'laptop', 'mouse', 'keyboard', 
-  'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 
-  'book', 'clock', 'vase', 'bench'
-];
+// All 80 YOLOv8 Categories Grouped
+const YOLO_CATEGORIES: Record<string, string[]> = {
+  "Person": ["person"],
+  "Vehicle": ["bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"],
+  "Outdoor": ["traffic light", "fire hydrant", "stop sign", "parking meter", "bench"],
+  "Animal": ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"],
+  "Accessory": ["backpack", "umbrella", "handbag", "tie", "suitcase"],
+  "Sports": ["frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket"],
+  "Kitchen": ["bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl"],
+  "Food": ["banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake"],
+  "Furniture": ["chair", "couch", "potted plant", "bed", "dining table", "toilet"],
+  "Electronic": ["tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator"],
+  "Indoor": ["book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+};
+
+function CategoryDropdown({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [hoveredMain, setHoveredMain] = useState<string | null>(null);
+
+  return (
+    <div className="relative w-full text-black">
+      {isOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => { setIsOpen(false); setHoveredMain(null); }}></div>
+      )}
+      <div 
+        className="relative z-50 w-full p-2 border rounded bg-white cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{value || "Select a category"}</span>
+        <span className="text-gray-400 text-xs">▼</span>
+      </div>
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-full sm:w-96 bg-white border border-gray-200 rounded-xl flex shadow-2xl z-50 overflow-hidden max-h-[300px]">
+          <ul className="w-1/2 border-r bg-white py-1 overflow-y-auto">
+            {Object.keys(YOLO_CATEGORIES).map(main => (
+              <li 
+                key={main}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between font-medium text-sm transition-colors"
+                onMouseEnter={() => setHoveredMain(main)}
+              >
+                {main} <span className="text-gray-300">▶</span>
+              </li>
+            ))}
+          </ul>
+          <div className="w-1/2 bg-gray-50 py-1 overflow-y-auto">
+            {hoveredMain ? (
+              <ul>
+                {YOLO_CATEGORIES[hoveredMain].map(sub => (
+                  <li 
+                    key={sub}
+                    className={`px-4 py-2 hover:bg-green-100 cursor-pointer text-sm transition-colors ${value === sub ? 'bg-green-500 text-white hover:bg-green-600 font-bold' : ''}`}
+                    onClick={() => {
+                      onChange(sub);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {sub}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex items-center justify-center h-full p-4 text-gray-400 text-sm italic text-center">
+                Hover a category<br/>to see items
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AddProductPage() {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState(AI_CATEGORIES[0]);
+  const [category, setCategory] = useState('chair');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !price) {
-      setStatus('Error: Please fill in required fields.');
+    if (!title) {
+      setStatus('Error: Please provide a Product Name.');
       return;
     }
 
@@ -36,7 +100,7 @@ export default function AddProductPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          price: parseFloat(price),
+          price: price ? parseFloat(price) : 0,
           description,
           category,
         }),
@@ -102,27 +166,18 @@ export default function AddProductPage() {
 
         <div>
            <label className="block mb-1 font-medium">AI Category (Detection Tag)</label>
-           <select 
-             value={category}
-             onChange={(e) => setCategory(e.target.value)}
-             className="w-full p-2 border rounded bg-white"
-           >
-             {AI_CATEGORIES.map(cat => (
-               <option key={cat} value={cat}>{cat}</option>
-             ))}
-           </select>
+           <CategoryDropdown value={category} onChange={setCategory} />
            <p className="text-xs text-gray-500 mt-1">This tells the AI what shape to look for.</p>
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Price ($)</label>
+          <label className="block mb-1 font-medium">Price ($) - Optional</label>
           <input 
             type="number" 
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             className="w-full p-2 border rounded"
             placeholder="299.99"
-            required
           />
         </div>
 

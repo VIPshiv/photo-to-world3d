@@ -1,16 +1,80 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiUrl } from "@/lib/api";
 
-// Common YOLOv8 Categories (Indoor/Furniture)
-const AI_CATEGORIES = [
-  'chair', 'couch', 'potted plant', 'bed', 'dining table', 
-  'toilet', 'tv', 'laptop', 'mouse', 'keyboard', 
-  'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 
-  'book', 'clock', 'vase', 'bench', 'suitcase', 'handbag',
-  'tie', 'bottle', 'cup', 'spoon', 'bowl'
-];
+// All 80 YOLOv8 Categories Grouped
+const YOLO_CATEGORIES: Record<string, string[]> = {
+  "Person": ["person"],
+  "Vehicle": ["bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"],
+  "Outdoor": ["traffic light", "fire hydrant", "stop sign", "parking meter", "bench"],
+  "Animal": ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"],
+  "Accessory": ["backpack", "umbrella", "handbag", "tie", "suitcase"],
+  "Sports": ["frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket"],
+  "Kitchen": ["bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl"],
+  "Food": ["banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake"],
+  "Furniture": ["chair", "couch", "potted plant", "bed", "dining table", "toilet"],
+  "Electronic": ["tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator"],
+  "Indoor": ["book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+};
+
+function CategoryDropdown({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [hoveredMain, setHoveredMain] = useState<string | null>(null);
+
+  return (
+    <div className="relative w-full text-black">
+      {isOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => { setIsOpen(false); setHoveredMain(null); }}></div>
+      )}
+      <div 
+        className="relative z-50 w-full p-2 border border-gray-300 rounded bg-white cursor-pointer flex justify-between items-center h-10"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{value || "Select a category"}</span>
+        <span className="text-gray-400 text-xs">▼</span>
+      </div>
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-full sm:w-96 bg-white border border-gray-200 rounded-xl flex shadow-2xl z-50 overflow-hidden max-h-[300px]">
+          <ul className="w-1/2 border-r bg-white py-1 overflow-y-auto">
+            {Object.keys(YOLO_CATEGORIES).map(main => (
+              <li 
+                key={main}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between font-medium text-sm transition-colors"
+                onMouseEnter={() => setHoveredMain(main)}
+              >
+                {main} <span className="text-gray-300">▶</span>
+              </li>
+            ))}
+          </ul>
+          <div className="w-1/2 bg-gray-50 py-1 overflow-y-auto">
+            {hoveredMain ? (
+              <ul>
+                {YOLO_CATEGORIES[hoveredMain].map(sub => (
+                  <li 
+                    key={sub}
+                    className={`px-4 py-2 hover:bg-indigo-50 text-indigo-700 cursor-pointer text-sm transition-colors ${value === sub ? 'bg-indigo-600 text-white hover:bg-indigo-700 font-bold' : ''}`}
+                    onClick={() => {
+                      onChange(sub);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {sub}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex items-center justify-center p-4 text-gray-400 h-full text-sm italic text-center">
+                Hover a category<br/>to see items
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Product {
   id: string;
@@ -24,7 +88,7 @@ export default function DashboardPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [prodTitle, setProdTitle] = useState('');
   const [prodPrice, setProdPrice] = useState('');
-  const [prodCategory, setProdCategory] = useState(AI_CATEGORIES[0]);
+  const [prodCategory, setProdCategory] = useState('chair');
   const [prodLink, setProdLink] = useState('');
   const [prodFile, setProdFile] = useState<File | null>(null);
   const [prodStatus, setProdStatus] = useState('');
@@ -40,8 +104,8 @@ export default function DashboardPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [serverImageUrl, setServerImageUrl] = useState<string | null>(null);
   const [previewHotspots, setPreviewHotspots] = useState<any[]>([]);
-  const [cachedResults, setCachedResults] = useState<{yolo: any[], dino: any[]}>({yolo: [], dino: []});
-  
+  const [cachedResults, setCachedResults] = useState<{yolo: any[] | null, dino: any[] | null}>({yolo: null, dino: null});
+
   // Track which models we've currently drafted for this file
   const [draftedViews, setDraftedViews] = useState<{ [key: string]: string | null }>({});
 
@@ -71,13 +135,32 @@ export default function DashboardPage() {
       setSceneStatus('You have a draft scene waiting to be finalized.');
     }
     fetchProducts();
+
+    // Check for auto-upload from stitch
+    const urlParams = new URLSearchParams(window.location.search);
+    const stitchImg = urlParams.get('img');
+    if (stitchImg) {
+      setSceneStatus("Loading stitched panorama...");
+      fetch(apiUrl(stitchImg))
+        .then(res => res.blob())
+        .then(blob => {
+          const fileName = stitchImg.split('/').pop() || 'panorama.jpg';
+          const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+          setSceneFile(file);
+          setSceneStatus("Panorama loaded! You can now analyze it.");
+        })
+        .catch(err => {
+          console.error("Failed to load stitched image as File:", err);
+          setSceneStatus("Error loading stitched panorama. Please upload manually.");
+        });
+    }
   }, []);
 
   // --- Handler: Add Product ---
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prodTitle || !prodPrice) {
-      setProdStatus('Error: Required fields missing.');
+    if (!prodTitle) {
+      setProdStatus('Error: Title is required.');
       return;
     }
 
@@ -93,7 +176,7 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           title: prodTitle,
-          price: parseFloat(prodPrice),
+          price: prodPrice ? parseFloat(prodPrice) : 0,
           category: prodCategory,
           externalLink: prodLink || undefined,
         }),
@@ -170,8 +253,8 @@ export default function DashboardPage() {
   const handleModelSwitch = async (type: 'yolo' | 'dino') => {
     if (isScanning) return;
     setModelType(type);
-    if (cachedResults[type] && cachedResults[type].length > 0) {
-      setPreviewHotspots(cachedResults[type]);
+    if (cachedResults[type] !== null) {
+      setPreviewHotspots(cachedResults[type] || []);
       setSceneStatus(`Switched to ${type.toUpperCase()} preview`);
     } else if (serverImageUrl) {
       // AI hasn't run for this yet, so we re-analyze the ALREADY uploaded image seamlessly.
@@ -387,7 +470,11 @@ export default function DashboardPage() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Price (₹)</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
+                    <CategoryDropdown value={prodCategory} onChange={setProdCategory} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Price (₹) - Optional</label>
                     <input 
                       type="number" 
                       value={prodPrice}
@@ -395,16 +482,6 @@ export default function DashboardPage() {
                       placeholder="0.00"
                       className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
-                    <select 
-                      value={prodCategory}
-                      onChange={e => setProdCategory(e.target.value)}
-                      className="w-full px-5 py-3 border border-slate-200 rounded-xl text-sm font-medium text-black bg-white/60 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none cursor-pointer"
-                    >
-                      {AI_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
                   </div>
                 </div>
 
@@ -649,7 +726,7 @@ export default function DashboardPage() {
                       setPreviewImage(null);
                       setServerImageUrl(null);
                       setPreviewHotspots([]);
-                      setCachedResults({yolo: [], dino: []});                    setDraftedViews({});                      setSceneStatus('');
+                    setCachedResults({yolo: null, dino: null});                    setDraftedViews({});                      setSceneStatus('');
                       setSceneFile(null);
                     }}
                     className="text-sm text-slate-400 underline mt-2 hover:text-slate-700"

@@ -260,7 +260,7 @@ export default function SceneViewer({ imageUrl, hotspots, height = '100vh' }: Sc
               {selectedHotspot.product?.title || selectedHotspot.label}
             </h3>
             
-            {selectedHotspot.product?.mainImageUrl && (
+            {selectedHotspot.product?.mainImageUrl ? (
               <div style={{
                 width: '100%',
                 height: 'clamp(140px, 28vh, 200px)',
@@ -277,8 +277,15 @@ export default function SceneViewer({ imageUrl, hotspots, height = '100vh' }: Sc
                     height: '100%',
                     objectFit: 'cover'
                   }}
+                  onError={(e) => {
+                     (e.currentTarget as HTMLImageElement).parentElement!.innerHTML = `<div style="padding:20px; color:red">Failed to load image</div>`;
+                  }}
                 />
               </div>
+            ) : (
+                <div style={{ color: 'red', fontSize: '12px' }}>
+                  DEBUG: No mainImageUrl found! Keys: {Object.keys(selectedHotspot.product || {}).join(', ')}
+                </div>
             )}
             
             {selectedHotspot.product?.price && (

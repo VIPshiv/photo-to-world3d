@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   UploadedFile,
   UseInterceptors,
   Get,
@@ -36,6 +37,7 @@ export class ProductsController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(
     @Param('id') id: string,
+    @CurrentUser() user: any,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({
@@ -50,19 +52,30 @@ export class ProductsController {
     )
     file: Express.Multer.File,
   ) {
-    return this.productsService.uploadImage(id, file.buffer, file.originalname);
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.productsService.uploadImage(id, file.buffer, file.originalname, tenantStoreId);
+  }
+
+  @Get('all')
+  findAllGlobal() {
+    return this.productsService.findAllGlobal();
   }
 
   @Get()
-  findAll(@CurrentUser() user: any) {
+  findAll(@CurrentUser() user: any, @Query('sceneId') sceneId?: string) {
     const tenantStoreId =
       user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
     if (!tenantStoreId) return [];
-    return this.productsService.findAll(tenantStoreId);
+    return this.productsService.findAll(tenantStoreId, sceneId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.delete(id);
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    return this.productsService.delete(id, tenantStoreId);
   }
 }

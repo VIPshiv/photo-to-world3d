@@ -47,10 +47,17 @@ export class ScenesService {
   }
 
   async finalizeScene(sceneId: string) {
-    return this.prisma.scene.update({
+    const scene = await this.prisma.scene.update({
       where: { id: sceneId },
       data: { status: 'LIVE' },
     });
+
+    await this.prisma.product.updateMany({
+      where: { storeId: scene.storeId, sceneId: null },
+      data: { sceneId: scene.id },
+    });
+
+    return scene;
   }
 
   async updateSceneStatus(sceneId: string, status: string) {
@@ -65,6 +72,7 @@ export class ScenesService {
     file: Express.Multer.File,
     title: string,
     modelType: string,
+    sceneId?: string,
   ) {
     const uploadDir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -74,7 +82,7 @@ export class ScenesService {
     const imageUrl = `/uploads/${filename}`;
 
     const storeProducts = await this.prisma.product.findMany({
-      where: { storeId },
+      where: sceneId ? { storeId, sceneId } : { storeId },
       select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
     });
 
@@ -88,7 +96,9 @@ export class ScenesService {
         file.buffer,
         file.originalname,
         allowedCategories as string[],
-        modelType
+        modelType,
+        storeId,
+        sceneId
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -141,6 +151,7 @@ export class ScenesService {
     storeId: string,
     imageUrl: string,
     modelType: string,
+    sceneId?: string,
   ) {
     const filePath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
     if (!fs.existsSync(filePath)) throw new Error('Image file not found on server');
@@ -149,7 +160,7 @@ export class ScenesService {
     const filename = path.basename(filePath);
 
     const storeProducts = await this.prisma.product.findMany({
-      where: { storeId },
+      where: sceneId ? { storeId, sceneId } : { storeId },
       select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
     });
 
@@ -163,7 +174,9 @@ export class ScenesService {
         buffer,
         filename,
         allowedCategories as string[],
-        modelType
+        modelType,
+        storeId,
+        sceneId
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -236,8 +249,15 @@ export class ScenesService {
       });
     }
 
-    return { success: true, sceneId: scene.id };
-  }
+      if (status === 'LIVE') {
+        await this.prisma.product.updateMany({
+          where: { storeId, sceneId: null },
+          data: { sceneId: scene.id },
+        });
+      }
+
+      return { success: true, sceneId: scene.id };
+    }
 
   async processScene(
     storeId: string,
@@ -278,6 +298,8 @@ export class ScenesService {
         file.buffer,
         file.originalname,
         allowedCategories as string[],
+        'yolo', // Added explicit default yolo
+        storeId,
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       // Safely handle unknown error type
@@ -389,6 +411,11 @@ export class ScenesService {
       });
     }
 
+    await this.prisma.product.updateMany({
+      where: { sceneId: draftId },
+      data: { sceneId: liveId }
+    });
+
     await this.prisma.hotspot.deleteMany({
       where: { sceneId: draftId }
     });
@@ -439,18 +466,37 @@ export class ScenesService {
           });
         }
       }
+
+        if (data.status === 'LIVE') {
+          const sceneToUpdate = await tx.scene.findUnique({ where: { id } });
+          if (sceneToUpdate) {
+            await tx.product.updateMany({
+              where: { storeId: sceneToUpdate.storeId, sceneId: null },
+              data: { sceneId: id },
+            });
+          }
+        }
     });
-    return { success: true, sceneId: id };
+    return { success: true };
   }
 
   async deleteScene(id: string) {
-    // Delete hotspots first if Prisma doesn't have cascade delete configured automatically
-    await this.prisma.hotspot.deleteMany({
-      where: { sceneId: id },
-    });
-    
-    await this.prisma.scene.delete({
-      where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Reset products that are linked to this scene
+      await tx.product.updateMany({
+        where: { sceneId: id },
+        data: { sceneId: null },
+      });
+
+      // 2. Delete all hotspots inside this scene
+      await tx.hotspot.deleteMany({
+        where: { sceneId: id },
+      });
+
+      // 3. Delete the scene itself
+      await tx.scene.delete({
+        where: { id },
+      });
     });
 
     return { success: true };

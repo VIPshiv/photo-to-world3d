@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/api";
+import SceneViewer from "@/components/viewer/SceneViewer";
 
 type StitchMode = "cubemap" | "guided";
 type GuidedSubMode = "manual" | "auto";
@@ -12,7 +13,10 @@ export default function StitchPage() {
   const [mode, setMode] = useState<StitchMode>("cubemap");
   const [guidedMode, setGuidedMode] = useState<GuidedSubMode>("manual");
   const [status, setStatus] = useState<string>("");
-  const [resultId, setResultId] = useState<string | null>(null);
+
+  const [cubemapResultId, setCubemapResultId] = useState<string | null>(null);
+  const [guidedResultId, setGuidedResultId] = useState<string | null>(null);
+  const [showPreviewUrl, setShowPreviewUrl] = useState<string | null>(null);
 
   const [autoFiles, setAutoFiles] = useState<File[]>([]);
 
@@ -71,7 +75,8 @@ export default function StitchPage() {
     }
 
     setStatus(`Stitching (${mode} mode) in progress...`);
-    setResultId(null);
+    if (mode === "cubemap") setCubemapResultId(null);
+    else setGuidedResultId(null);
 
     const formData = new FormData();
     formData.append("mode", mode);
@@ -101,8 +106,12 @@ export default function StitchPage() {
       }
 
       const data = await response.json();
-      setStatus("Stitching complete! Click to view.");
-      setResultId(encodeURIComponent(data.imageUrl));
+      setStatus("Stitching complete! Choose an action below.");
+      
+      const imageUrl = encodeURIComponent(data.imageUrl);
+      if (mode === "cubemap") setCubemapResultId(imageUrl);
+      else setGuidedResultId(imageUrl);
+      
     } catch (err: unknown) {
       console.error("Upload Error:", err);
       const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
@@ -144,7 +153,7 @@ export default function StitchPage() {
           <form onSubmit={handleSubmit} className="absolute inset-0 flex flex-col xl:flex-row gap-6 w-full h-full">
 
             {/* INFO PANEL */}
-            <div className="w-full xl:w-[28%] flex flex-col gap-6 h-full transition-all duration-[600ms] ease-in-out absolute xl:relative z-10 xl:order-first">
+            <div className="w-full xl:w-[28%] flex flex-col gap-4 h-full transition-all duration-[600ms] ease-in-out absolute xl:relative z-10 xl:order-first overflow-y-auto custom-scrollbar px-1 pb-6">
               
               {/* Mode Selection */}
               <div className="bg-white/80 backdrop-blur-xl p-4 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-shadow duration-300 flex-shrink-0 animate-in fade-in slide-in-from-top-4">
@@ -170,41 +179,83 @@ export default function StitchPage() {
                  )}
               </div>
 
-              {/* Instructions Panel */}
-              <div className="bg-white/80 backdrop-blur-xl p-4 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-shadow duration-300 flex-shrink-0">
-                 <div className="flex items-center gap-2 mb-2">
-                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white transition-colors duration-500 text-[10px] ${mode === "cubemap" ? "bg-black" : "bg-indigo-500"}`}>ℹ️</div>
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-800">Requirements</h3>
-                 </div>
-                 <p className="text-[11px] font-bold text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 uppercase tracking-wide">
-                   {mode === "cubemap" ? "Upload exactly 6 specific faces of a cube (front, back, top, bottom, left, right) to create a seamless 360° panorama." : "Capture overlapping photos around you. Our AI will automatically align and stitch them together."}
-                 </p>
-              </div>
+              {/* Instructions Panel - Hidden when processing or complete to save space */}
+              {!status && !cubemapResultId && !guidedResultId && (
+                <div className="bg-white/80 backdrop-blur-xl p-4 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-shadow duration-300 flex-shrink-0 animate-in fade-in zoom-in duration-500">
+                   <div className="flex items-center gap-2 mb-2">
+                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white transition-colors duration-500 text-[10px] ${mode === "cubemap" ? "bg-black" : "bg-indigo-500"}`}>ℹ️</div>
+                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-800">Requirements</h3>
+                   </div>
+                   <p className="text-[11px] font-bold text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 uppercase tracking-wide">
+                     {mode === "cubemap" ? "Upload exactly 6 specific faces of a cube (front, back, top, bottom, left, right) to create a seamless 360° panorama." : "Capture overlapping photos around you. Our AI will automatically align and stitch them together."}
+                   </p>
+                </div>
+              )}
 
               {/* Process / Status Box (Shown only when active) */}
-              {(status || resultId) && (
+              {(status || cubemapResultId || guidedResultId) && (
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 transition-all duration-300 flex flex-col relative overflow-hidden animate-in fade-in zoom-in duration-300">
                    <div className={`absolute top-0 left-0 w-full h-1 transition-colors duration-500 ${mode === "cubemap" ? "bg-gradient-to-r from-gray-700 to-black" : "bg-gradient-to-r from-indigo-500 to-purple-600"}`} />
                    <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">Processing Station</h2>
                    
-                   <div className="flex flex-col justify-center items-center text-center p-3 bg-[#f8fafc] rounded-xl border border-slate-100">
-                       <div className={`flex flex-col items-center gap-3 ${status.includes("Error") ? "text-rose-600" : "text-emerald-700"}`}>
-                          {status.includes("progress") ? (
-                            <div className={`w-8 h-8 border-4 border-t-transparent rounded-full animate-spin ${mode === "cubemap" ? "border-slate-900" : "border-indigo-600"}`}/>
-                          ) : status.includes("Error") ? (
-                            <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl font-black shadow-sm">!</div>
-                          ) : (
-                            <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-lg font-black shadow-sm">✓</div>
-                          )}
-                          <span className="text-[10px] font-black leading-snug uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm">{status}</span>
-                       </div>
-                   </div>
+                   {status && (
+                     <div className="flex flex-col justify-center items-center text-center p-3 bg-[#f8fafc] rounded-xl border border-slate-100 mb-4">
+                         <div className={`flex flex-col items-center gap-3 ${status.includes("Error") ? "text-rose-600" : "text-emerald-700"}`}>
+                            {status.includes("progress") ? (
+                              <div className={`w-8 h-8 border-4 border-t-transparent rounded-full animate-spin ${mode === "cubemap" ? "border-slate-900" : "border-indigo-600"}`}/>
+                            ) : status.includes("Error") ? (
+                              <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl font-black shadow-sm">!</div>
+                            ) : (
+                              <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-lg font-black shadow-sm">✓</div>
+                            )}
+                            <span className="text-[10px] font-black leading-snug uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm">{status}</span>
+                         </div>
+                     </div>
+                   )}
 
-                   {/* Results Button */}
-                   {resultId && (
-                     <div className="mt-4 animate-in slide-in-from-bottom-4 fade-in duration-500">
-                       <Link href={`/view/local?img=${resultId}`} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all ${mode === "cubemap" ? "bg-black hover:bg-black text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}>
-                         View Final 3D Panorama
+                   {/* Results Action Buttons */}
+                   {((mode === "cubemap" && cubemapResultId) || (mode === "guided" && guidedResultId)) && (
+                     <div className="flex flex-col gap-2 mt-2 animate-in slide-in-from-bottom-4 fade-in duration-500">
+                       <button 
+                         type="button"
+                         onClick={() => setShowPreviewUrl((mode === "cubemap" ? cubemapResultId : guidedResultId))}
+                         className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm border transition-all ${mode === "cubemap" ? "border-slate-800 text-slate-800 hover:bg-slate-50" : "border-indigo-600 text-indigo-600 hover:bg-indigo-50"}`}
+                       >
+                         👁️ Preview 3D Panorama
+                       </button>
+
+                       <button 
+                         type="button"
+                         onClick={async () => {
+                           try {
+                             const url = apiUrl(decodeURIComponent((mode === "cubemap" ? cubemapResultId : guidedResultId) as string));
+                             const res = await fetch(url);
+                             const blob = await res.blob();
+                             const blobUrl = window.URL.createObjectURL(blob);
+                             const link = document.createElement("a");
+                             link.href = blobUrl;
+                             link.download = "panorama.jpg";
+                             document.body.appendChild(link);
+                             link.click();
+                             document.body.removeChild(link);
+                             window.URL.revokeObjectURL(blobUrl);
+                           } catch (err) {
+                             console.error("Failed to download image", err);
+                             alert("Could not download the image directly. The image will open in a new tab.");
+                             window.open(apiUrl(decodeURIComponent((mode === "cubemap" ? cubemapResultId : guidedResultId) as string)), "_blank");
+                           }
+                         }}
+                         className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm transition-all text-slate-600 border border-slate-200 bg-white hover:bg-slate-50`}
+                       >
+                         💾 Save to Device
+                       </button>
+                       
+                       <Link 
+                         prefetch={false}
+                         href={`/upload?img=${(mode === "cubemap" ? cubemapResultId : guidedResultId)}`}
+                         className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-white ${mode === "cubemap" ? "bg-black hover:bg-slate-900" : "bg-indigo-600 hover:bg-indigo-700"}`}
+                       >
+                         Next Step: Upload Scene ⚡
                        </Link>
                      </div>
                    )}
@@ -326,6 +377,26 @@ export default function StitchPage() {
           </form>
         </div>
       </div>
+
+      {/* Fullscreen Preview Overlay */}
+      {showPreviewUrl && (
+        <div className="fixed inset-0 z-[100] bg-black">
+          <div className="absolute top-4 left-4 z-[110]">
+            <button 
+              onClick={() => setShowPreviewUrl(null)}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-black hover:bg-gray-200 transition-all shadow-lg flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              Go Back
+            </button>
+          </div>
+          <SceneViewer 
+            imageUrl={apiUrl(decodeURIComponent(showPreviewUrl))} 
+            hotspots={[]}
+            height="100vh"
+          />
+        </div>
+      )}
     </div>
   );
 }

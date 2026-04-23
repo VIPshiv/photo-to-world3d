@@ -83,6 +83,8 @@ model Product {
   updatedAt DateTime @updatedAt
 
   store    Store     @relation(fields: [storeId], references: [id])
+  sceneId  String?
+  scene    Scene?    @relation("SceneInventory", fields: [sceneId], references: [id])
   hotspots Hotspot[]
 }
 
@@ -106,8 +108,9 @@ model Scene {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  store    Store     @relation(fields: [storeId], references: [id])
-  hotspots Hotspot[]
+  store     Store     @relation(fields: [storeId], references: [id])
+  hotspots  Hotspot[]
+  inventory Product[] @relation("SceneInventory")
 }
 
 model Hotspot {

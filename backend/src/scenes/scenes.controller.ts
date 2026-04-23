@@ -39,7 +39,7 @@ export class ScenesController {
         .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
     )
     file: Express.Multer.File,
-    @Body() body: { title: string, modelType?: string },
+    @Body() body: { title: string, modelType?: string, sceneId?: string },
   ) {
     if (!file) throw new BadRequestException('File is required');
     this.uploadService.validatePanorama(file.buffer, file.originalname);
@@ -47,18 +47,18 @@ export class ScenesController {
     const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
     if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
 
-    return this.scenesService.analyzeScene(tenantStoreId, file, body.title, body.modelType || 'yolo');
+    return this.scenesService.analyzeScene(tenantStoreId, file, body.title, body.modelType || 'yolo', body.sceneId);
   }
 
   @Post('analyze-existing')
   async analyzeExistingScene(
     @CurrentUser() user: any,
-    @Body() body: { imageUrl: string, modelType?: string },
+    @Body() body: { imageUrl: string, modelType?: string, sceneId?: string },
   ) {
     const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
     if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
 
-    return this.scenesService.analyzeExistingScene(tenantStoreId, body.imageUrl, body.modelType || 'yolo');
+    return this.scenesService.analyzeExistingScene(tenantStoreId, body.imageUrl, body.modelType || 'yolo', body.sceneId);
   }
 
   @Post('save')
@@ -118,58 +118,6 @@ export class ScenesController {
     return this.scenesService.getScenesByStoreId(tenantStoreId); // Requires implementation in service
   }
 
-  @Get(':id')
-  async getScene(@Param('id') id: string) {
-    const scene = await this.scenesService.getSceneById(id);
-    if (!scene) throw new NotFoundException('Scene not found');
-    return scene;
-  }
-
-  @Post(':id')
-  async updateScene(
-    @Param('id') id: string,
-    @Body() body: { title?: string, imageUrl?: string, hotspots?: any[], status?: string, modelType?: string },
-    @CurrentUser() user: any
-  ) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
-    return this.scenesService.updateScene(id, body);
-  }
-
-  @Post(':id/finalize')
-  async finalizeScene(@Param('id') id: string) {
-    const scene = await this.scenesService.getSceneById(id);
-    if (!scene) throw new NotFoundException('Scene not found');
-    return this.scenesService.finalizeScene(id);
-  }
-
-  @Post(':id/status')
-  async updateSceneStatus(@Param('id') id: string, @Body() body: { status: string }) {
-    const scene = await this.scenesService.getSceneById(id);
-    if (!scene) throw new NotFoundException('Scene not found');
-    return this.scenesService.updateSceneStatus(id, body.status);
-  }
-
-  @Post(':id/replace-with-draft')
-  async replaceWithDraft(@Param('id') liveId: string, @Body() body: { draftId: string }, @CurrentUser() user: any) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
-
-    return this.scenesService.replaceLiveWithDraft(liveId, body.draftId);
-  }
-
-  @Delete(':id')
-  async deleteScene(@Param('id') id: string, @CurrentUser() user: any) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
-    
-    // In production, we'd check if the scene belongs to the tenantStoreId
-    const scene = await this.scenesService.getSceneById(id);
-    if (!scene) throw new NotFoundException('Scene not found');
-
-    return this.scenesService.deleteScene(id);
-  }
-
   @Post('stitch')
   @UseInterceptors(AnyFilesInterceptor())
   async stitchScenes(
@@ -186,5 +134,78 @@ export class ScenesController {
 
     const resultUrl = await this.scenesService.stitchScene(files, mode);
     return { success: true, imageUrl: resultUrl };
+  }
+
+  @Get(':id')
+  async getScene(@Param('id') id: string) {
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    return scene;
+  }
+
+  @Post(':id')
+  async updateScene(
+    @Param('id') id: string,
+    @Body() body: { title?: string, imageUrl?: string, hotspots?: any[], status?: string, modelType?: string },
+    @CurrentUser() user: any
+  ) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    if (scene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this scene');
+
+    return this.scenesService.updateScene(id, body);
+  }
+
+  @Post(':id/finalize')
+  async finalizeScene(@Param('id') id: string, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    if (scene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this scene');
+
+    return this.scenesService.finalizeScene(id);
+  }
+
+  @Post(':id/status')
+  async updateSceneStatus(@Param('id') id: string, @Body() body: { status: string }, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    if (scene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this scene');
+
+    return this.scenesService.updateSceneStatus(id, body.status);
+  }
+
+  @Post(':id/replace-with-draft')
+  async replaceWithDraft(@Param('id') liveId: string, @Body() body: { draftId: string }, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    const liveScene = await this.scenesService.getSceneById(liveId);
+    if (!liveScene || liveScene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this live scene');
+
+    const draftScene = await this.scenesService.getSceneById(body.draftId);
+    if (!draftScene || draftScene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this draft scene');
+
+    return this.scenesService.replaceLiveWithDraft(liveId, body.draftId);
+  }
+
+  @Delete(':id')
+  async deleteScene(@Param('id') id: string, @CurrentUser() user: any) {
+    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+
+    const scene = await this.scenesService.getSceneById(id);
+    if (!scene) throw new NotFoundException('Scene not found');
+    if (scene.storeId !== tenantStoreId) throw new BadRequestException('You do not own this scene');
+
+    return this.scenesService.deleteScene(id);
   }
 }

@@ -10,15 +10,28 @@ export class AiService {
     imageBuffer: Buffer,
     filename: string,
     allowedClasses?: string[],
-    modelType: string = 'yolo'
+    modelType: string = 'yolo',
+    storeId?: string,
+    sceneId?: string,
   ) {
     try {
       const formData = new FormData();
       formData.append('file', imageBuffer, { filename });
       formData.append('model_type', modelType);
+      
+      if (storeId) {
+        formData.append('storeId', storeId);
+      }
+      if (sceneId) {
+        formData.append('sceneId', sceneId);
+      }
 
-      if (allowedClasses && allowedClasses.length > 0) {
-        formData.append('classes', allowedClasses.join(','));
+      if (allowedClasses !== undefined) {
+        if (allowedClasses.length === 0) {
+          formData.append('classes', '__EMPTY__');
+        } else {
+          formData.append('classes', allowedClasses.join(','));
+        }
       }
 
       const response = await axios.post(

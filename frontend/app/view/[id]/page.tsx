@@ -77,7 +77,7 @@ export default async function ViewScenePage({ params }: Props) {
             id: h.id,
             yaw: h.yaw,
             pitch: h.pitch,
-            label: h.product?.title || 'Unknown Item',
+            label: h.product?.title || h.label || 'Unknown Item',
             product: h.product
         }))} 
       />

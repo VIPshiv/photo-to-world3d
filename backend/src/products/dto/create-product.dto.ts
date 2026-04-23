@@ -4,4 +4,5 @@ export class CreateProductDto {
   description?: string;
   category?: string; // used for auto-tagging later
   externalLink?: string; // external link for the explore button
+  sceneId?: string; // tie product to specific scene
 }

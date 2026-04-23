@@ -6,13 +6,77 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import SceneViewer from '@/components/viewer/SceneViewer';
 import { apiUrl } from "@/lib/api";
 
-const AI_CATEGORIES = [
-  'chair', 'couch', 'potted plant', 'bed', 'dining table',
-  'toilet', 'tv', 'laptop', 'mouse', 'keyboard',
-  'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
-  'book', 'clock', 'vase', 'bench', 'suitcase', 'handbag',
-  'tie', 'bottle', 'cup', 'spoon', 'bowl'
-];
+// All 80 YOLOv8 Categories Grouped
+const YOLO_CATEGORIES: Record<string, string[]> = {
+  "Person": ["person"],
+  "Vehicle": ["bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"],
+  "Outdoor": ["traffic light", "fire hydrant", "stop sign", "parking meter", "bench"],
+  "Animal": ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"],
+  "Accessory": ["backpack", "umbrella", "handbag", "tie", "suitcase"],
+  "Sports": ["frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket"],
+  "Kitchen": ["bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl"],
+  "Food": ["banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake"],
+  "Furniture": ["chair", "couch", "potted plant", "bed", "dining table", "toilet"],
+  "Electronic": ["tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator"],
+  "Indoor": ["book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+};
+
+function CategoryDropdown({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [hoveredMain, setHoveredMain] = useState<string | null>(null);
+
+  return (
+    <div className="relative w-full text-black">
+      {isOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => { setIsOpen(false); setHoveredMain(null); }}></div>
+      )}
+      <div 
+        className="relative z-50 w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs font-medium text-gray-600 cursor-pointer flex justify-between items-center transition-all hover:bg-white"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{value || "Select a category"}</span>
+        <span className="text-gray-400 text-xs">▼</span>
+      </div>
+      {isOpen && (
+        <div className="absolute bottom-full left-0 mb-1 w-full sm:w-80 bg-white border border-gray-200 rounded-xl flex shadow-2xl z-50 overflow-hidden max-h-[300px]">
+          <ul className="w-1/2 border-r bg-white py-1 overflow-y-auto">
+            {Object.keys(YOLO_CATEGORIES).map(main => (
+              <li 
+                key={main}
+                className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer flex justify-between font-bold text-[11px] transition-colors"
+                onMouseEnter={() => setHoveredMain(main)}
+              >
+                {main} <span className="text-gray-300">▶</span>
+              </li>
+            ))}
+          </ul>
+          <div className="w-1/2 bg-gray-50 py-1 overflow-y-auto">
+            {hoveredMain ? (
+              <ul>
+                {YOLO_CATEGORIES[hoveredMain].map(sub => (
+                  <li 
+                    key={sub}
+                    className={`px-3 py-1.5 hover:bg-indigo-50 text-indigo-700 cursor-pointer text-[11px] transition-colors ${value === sub ? 'bg-indigo-600 text-white hover:bg-indigo-700 font-bold' : ''}`}
+                    onClick={() => {
+                      onChange(sub);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {sub}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex items-center justify-center p-3 h-full text-gray-400 text-[10px] italic text-center">
+                Hover a category<br/>to see items
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Product {
   id: string;
@@ -20,7 +84,7 @@ interface Product {
   category: string;
   price: number;
   externalLink?: string;
-  imageUrl?: string;
+  mainImageUrl?: string;
 }
 
 export default function EditScenePage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +94,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
   const [products, setProducts] = useState<Product[]>([]);
   const [prodTitle, setProdTitle] = useState('');
   const [prodPrice, setProdPrice] = useState('');
-  const [prodCategory, setProdCategory] = useState(AI_CATEGORIES[0]);
+  const [prodCategory, setProdCategory] = useState("chair");
   const [prodLink, setProdLink] = useState('');
   const [prodFile, setProdFile] = useState<File | null>(null);
   const [prodStatus, setProdStatus] = useState('');
@@ -67,7 +131,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(apiUrl('/products'), {
+      const res = await fetch(apiUrl(`/products?sceneId=${id}`), {
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
       if (res.ok) {
@@ -124,7 +188,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
     setEditingProductId(null);
     setProdTitle('');
     setProdPrice('');
-    setProdCategory(AI_CATEGORIES[0]);
+    setProdCategory('chair');
     setProdLink('');
     setProdFile(null);
     setProdStatus('');
@@ -134,8 +198,8 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
 
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prodTitle || !prodPrice) {
-      setProdStatus('Error: Required fields missing.');
+    if (!prodTitle) {
+      setProdStatus('Error: Title is required.');
       return;
     }
     setProdStatus(editingProductId ? 'Saving Changes...' : 'Creating Product...');
@@ -148,7 +212,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
       const productRes = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'x-mock-user-id': localStorage.getItem('mockUserId') || '' },
-        body: JSON.stringify({ title: prodTitle, price: parseFloat(prodPrice), category: prodCategory, externalLink: prodLink || undefined }),
+        body: JSON.stringify({ sceneId: id, title: prodTitle, price: prodPrice ? parseFloat(prodPrice) : 0, category: prodCategory, externalLink: prodLink || undefined }),
       });
       if (!productRes.ok) throw new Error('Failed to save product');
       const product = await productRes.json();
@@ -376,11 +440,13 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
                   <div className="flex-1 min-h-[100px] overflow-y-auto border border-gray-100 rounded-2xl bg-[#f8fafc] p-2 text-xs custom-scrollbar flex flex-col gap-1.5 shadow-inner">
                     {products.length === 0 ? <div className="text-center py-6 flex flex-col items-center justify-center opacity-50 h-full"><p className="italic font-medium">Store inventory is empty</p></div> : products.map(p => (
                       <div key={p.id} className="group flex justify-between items-center p-2 cursor-default bg-white rounded-xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                        {p.imageUrl && (
-                          <div className="w-10 h-10 rounded-lg overflow-hidden mr-2 flex-shrink-0 border border-gray-200 bg-gray-50 relative group-hover:scale-105 transition-transform duration-300">
-                            <img src={apiUrl(p.imageUrl)} alt={p.title} className="w-full h-full object-cover" />
-                          </div>
-                        )}
+                        <div className="w-10 h-10 rounded-lg overflow-hidden mr-2 flex-shrink-0 border border-gray-200 bg-gray-50 relative flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                          {p.mainImageUrl ? (
+                            <img src={apiUrl(p.mainImageUrl)} alt={p.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16h16M4 20h16M4 4h16v12H4z" /></svg>
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0 pr-1">
                            <div className="font-bold text-gray-800 truncate mb-0.5 text-[11px] uppercase tracking-wide" title={p.title}>{p.title}</div>
                            <div className="flex items-center gap-1.5">
@@ -414,10 +480,8 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
                     </div>
                     <div><input type="text" value={prodTitle} onChange={e => setProdTitle(e.target.value)} placeholder="Product Name" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs text-black focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-medium transition-all"/></div>
                     <div className="grid grid-cols-2 gap-2">
-                      <input type="number" value={prodPrice} onChange={e => setProdPrice(e.target.value)} placeholder="Price" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs text-black focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-medium transition-all"/>
-                      <select value={prodCategory} onChange={e => setProdCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs text-black focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none appearance-none font-medium text-gray-600 transition-all cursor-pointer">
-                        {AI_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <CategoryDropdown value={prodCategory} onChange={setProdCategory} />
+                      <input type="number" value={prodPrice} onChange={e => setProdPrice(e.target.value)} placeholder="Price (Optional)" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs text-black focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-medium transition-all"/>
                     </div>
                     <div><input type="url" value={prodLink} onChange={e => setProdLink(e.target.value)} placeholder="URL" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-xs text-black focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-medium transition-all"/></div>
                     <div className="border border-dashed border-gray-300 rounded-lg p-1 hover:border-indigo-400 bg-gray-50/50 transition-colors"><input type="file" accept="image/*" onChange={e => setProdFile(e.target.files?.[0] || null)} className="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[9px] file:font-black file:bg-white file:border file:border-gray-200 file:text-gray-700 hover:file:bg-gray-100 file:transition-colors cursor-pointer uppercase"/></div>

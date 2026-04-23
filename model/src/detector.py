@@ -83,7 +83,11 @@ class ObjectDetector:
             
             # Find closest product
             for prod in product_embeddings:
-                score = torch.dot(crop_vec, prod['embedding'].flatten()).item()
+                if prod.get('embedding') is None:
+                    continue
+                
+                # Align tensor shapes: crop_vec is (1,512), embedding is (1,512)
+                score = (crop_vec.unsqueeze(0) @ prod['embedding'].T).item()
                 if score > best_score:
                     best_score = score
                     best_prod = prod
@@ -111,26 +115,7 @@ class ObjectDetector:
                     "product": best_prod,
                     "type": "product_match"
                 })
-            else:
-                # Reject mapping to a product if it fails the threshold check
-                matches.append({
-                    "label": crop_metadata[i]['yolo_label'],
-                    "center": crop_metadata[i]['center'],
-                    "confidence": crop_metadata[i]['yolo_conf'],
-                    "box": crop_metadata[i]['box'],
-                    "product": None,
-                    "type": "generic_detection"
-                })
 
-        # 5. Advanced Deduplication
-        # Route through our universal helper function
-        return self._reduce_duplicate_hotspots(matches)
-
-    def _reduce_duplicate_hotspots(self, matches):
-        """
-        Universal helper function that applies spatial and semantic deduplication.
-        It merges bounding boxes/centers that are highly overlapping or geometrically similar.
-        """
         final_matches = []
         # Sort by confidence so we keep the best ones
         matches = sorted(matches, key=lambda x: x['confidence'], reverse=True)
@@ -260,6 +245,51 @@ class ObjectDetector:
         # Route through our universal deduplication logic!
         return self._reduce_duplicate_hotspots(matches)
 
+    def _reduce_duplicate_hotspots(self, matches, iou_thresh=0.5):
+        """
+        NMS (Non-Maximum Suppression) helper to merge duplicated bounding boxes
+        found across crops or overlapping inference areas.
+        """
+        if not matches:
+            return []
+            
+        def compute_iou(boxA, boxB):
+            # box: [x1, y1, x2, y2]
+            xA = max(boxA[0], boxB[0])
+            yA = max(boxA[1], boxB[1])
+            xB = min(boxA[2], boxB[2])
+            yB = min(boxA[3], boxB[3])
+
+            interArea = max(0, xB - xA) * max(0, yB - yA)
+            if interArea == 0:
+                return 0.0
+
+            boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+            boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+            return interArea / float(boxAArea + boxBArea - interArea)
+
+        # Sort matches by highest confidence so we keep the strongest detection
+        matches = sorted(matches, key=lambda m: m['confidence'], reverse=True)
+        keep = []
+
+        for m in matches:
+            # Check if it significantly overlaps with any box we are already keeping.
+            should_keep = True
+            for k in keep:
+                # Calculate IOU between m and k
+                iou = compute_iou(m['box'], k['box'])
+                if iou > iou_thresh:
+                    # They overlap too much! Since we sorted by confidence,
+                    # 'k' is strictly better/equal, so we discard 'm'.
+                    should_keep = False
+                    break
+                    
+            if should_keep:
+                keep.append(m)
+
+        return keep
+
     def detect_from_image(self, image_bytes, allowed_classes=None):
         """
         Advanced Detection: Slices image into Left/Right halves to preserve resolution
@@ -303,7 +333,7 @@ class ObjectDetector:
                     cls_id = int(box.cls[0])
                     class_name = self.model.names[cls_id]
 
-                    if allowed_classes and class_name not in allowed_classes:
+                    if allowed_classes is not None and class_name not in allowed_classes:
                         continue
 
                     # Normalized Center

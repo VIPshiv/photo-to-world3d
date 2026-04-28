@@ -79,6 +79,8 @@ model Product {
   // External product link for the hotspots
   externalLink String?
 
+  embedding Float[] // Stored tensor for AI
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -95,18 +97,18 @@ model Product {
 model Scene {
   id           String      @id @default(uuid())
   storeId      String
-  title        String      // e.g. "Entrance", "Aisle 3"
-  imageUrl     String      // The 360 Panorama URL (Cloudinary/S3)
+  title        String // e.g. "Entrance", "Aisle 3"
+  imageUrl     String // The 360 Panorama URL (Cloudinary/S3)
   thumbnailUrl String?
   status       SceneStatus @default(DRAFT)
   modelType    String      @default("yolo") // yolo or dino
 
   // Basic metadata for the panorama
-  initialYaw   Float    @default(0)
-  initialPitch Float    @default(0)
+  initialYaw   Float @default(0)
+  initialPitch Float @default(0)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   store     Store     @relation(fields: [storeId], references: [id])
   hotspots  Hotspot[]

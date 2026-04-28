@@ -113,9 +113,10 @@ export default function DashboardPage() {
   const [sceneId, setSceneId] = useState<string | null>(null);
 
   // --- Fetch Products on Load ---
-  const fetchProducts = async () => {
+  const fetchProducts = async (currentSceneId?: string) => {
     try {
-      const res = await fetch(apiUrl('/products'), {
+      const url = currentSceneId ? `/products?sceneId=${currentSceneId}` : '/products';
+      const res = await fetch(apiUrl(url), {
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
       if (res.ok) {
@@ -128,13 +129,34 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    const draftId = sessionStorage.getItem('draftSceneId');
-    if (draftId) {
-      setSceneId(draftId);
-      setHotspotCount(parseInt(sessionStorage.getItem('draftHotspotCount') || '0', 10));
-      setSceneStatus('You have a draft scene waiting to be finalized.');
+    // 1. Wipe any old draft left over from a previous unfinished visit
+    const oldDraft = sessionStorage.getItem('draftSceneId');
+    if (oldDraft) {
+      fetch(apiUrl(`/scenes/${oldDraft}/cancel`), {
+        method: 'POST',
+        headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+      }).catch(err => console.error(err));
+      sessionStorage.removeItem('draftSceneId');
     }
-    fetchProducts();
+
+    let currentDraftId: string | null = null;
+
+    // 2. ALWAYS auto-create a FRESH Draft scene when user enters the upload page
+    fetch(apiUrl('/scenes/draft'), {
+      method: 'POST',
+      headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.sceneId) {
+          sessionStorage.setItem('draftSceneId', data.sceneId);
+          setSceneId(data.sceneId);
+          currentDraftId = data.sceneId;
+          console.log('Started a fresh draft scene session:', data.sceneId);
+          fetchProducts(data.sceneId); // Load fresh subset including scene's own products
+        }
+      })
+      .catch((err) => console.error('Failed to create draft scene', err));
 
     // Check for auto-upload from stitch
     const urlParams = new URLSearchParams(window.location.search);
@@ -154,6 +176,37 @@ export default function DashboardPage() {
           setSceneStatus("Error loading stitched panorama. Please upload manually.");
         });
     }
+
+    // --- Cleanup Draft Unsaved Scenes on Tab Close/Unmount ---
+    const cancelDraftScene = (id: string | null) => {
+      if (!id) return;
+      const isSaved = sessionStorage.getItem('sceneSaved') === 'true';
+      if (!isSaved) {
+        // Using fetch with keepalive ensures it fires like sendBeacon but lets us set headers
+        fetch(apiUrl(`/scenes/${id}/cancel`), {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            'x-mock-user-id': localStorage.getItem('mockUserId') || '',
+            'Content-Type': 'application/json'
+          }
+        }).catch(err => console.error("Cleanup failed", err));
+        sessionStorage.removeItem('draftSceneId');
+        sessionStorage.removeItem('draftHotspotCount');
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      cancelDraftScene(currentDraftId);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Optional: Since it's an SPA, leaving the page calls this unmount.
+      cancelDraftScene(currentDraftId);
+    };
   }, []);
 
   // --- Handler: Add Product ---
@@ -179,6 +232,7 @@ export default function DashboardPage() {
           price: prodPrice ? parseFloat(prodPrice) : 0,
           category: prodCategory,
           externalLink: prodLink || undefined,
+          sceneId: sceneId || undefined, // tie product to the current draft directly
         }),
       });
 
@@ -203,7 +257,7 @@ export default function DashboardPage() {
       setProdPrice('');
       setProdLink('');
       setProdFile(null);
-      fetchProducts(); // Refresh list
+      fetchProducts(sceneId || undefined); // Refresh list
     } catch (err) {
       setProdStatus(`Error: ${String(err)}`);
     }
@@ -221,6 +275,7 @@ export default function DashboardPage() {
     formData.append('file', sceneFile);
     formData.append('title', sceneTitle);
     formData.append('modelType', modelType);
+    if (sceneId) formData.append('sceneId', sceneId);
 
     try {
       const res = await fetch(apiUrl('/scenes/analyze'), {
@@ -313,13 +368,15 @@ export default function DashboardPage() {
           imageUrl: serverImageUrl,
           modelType: modelType.toLowerCase(),
           hotspots: previewHotspots,
-          status: isDraft ? 'DRAFT' : 'LIVE'
+          status: isDraft ? 'DRAFT' : 'LIVE',
+          sceneId: sceneId
         })
       });
       
       const data = await res.json();
       
       if (res.ok) {
+        sessionStorage.setItem('sceneSaved', 'true');
         if (isDraft) {
           setDraftedViews({ ...draftedViews, [modelType]: data.sceneId });
           setSceneStatus(`Saved as Draft! You can switch models and draft another, or view drafts in Edit page.`);
@@ -363,7 +420,7 @@ export default function DashboardPage() {
         method: 'DELETE',
         headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '' }
       });
-      fetchProducts();
+      fetchProducts(sceneId || undefined);
     } catch (e) {
       alert('Failed to delete');
     }
@@ -558,7 +615,7 @@ export default function DashboardPage() {
                         {sceneFile ? '📎' : '☁️'}
                      </div>
                      <div className="text-sm font-medium text-black">
-                        {sceneFile ? sceneFile.name : (sceneId ? 'Using Draft Image. Click to change.' : 'Click to Upload Panorama')}
+                        {sceneFile ? sceneFile.name : (previewImage ? 'Using Draft Image. Click to change.' : 'Click to Upload Panorama')}
                      </div>
                      {!sceneFile && <div className="text-xs text-slate-400">Supports JPG, PNG (2:1 Ratio)</div>}
                   </div>
@@ -586,54 +643,14 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {(sceneStatus || sceneId) && (
+            {(sceneStatus && !previewImage) && (
               <div className="mt-8 animate-fade-in">
-                {sceneStatus && !sceneId && (
-                   <div className={`p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
-                    sceneStatus.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
-                   }`}>
-                      {sceneStatus.includes('Scanning') && <span className="animate-spin">⏳</span>}
-                      {sceneStatus}
-                   </div>
-                )}
-
-                {sceneId && (
-                  <div className="bg-green-50 border border-green-100 rounded-2xl p-6 text-center">
-                    <div className="text-5xl mb-3">🎉</div>
-                    <h3 className="font-bold text-lg text-green-800 mb-1">Scan Complete!</h3>
-                    <p className="text-green-700 text-sm mb-6">
-                      {hotspotCount > 0 ? `Found ${hotspotCount} matching inventory items.` : 'No matching items found.'}
-                    </p>
-                    
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={() => {
-                          setSceneId(null);
-                          setSceneStatus('');
-                          setHotspotCount(0);
-                          setSceneFile(null);
-                          sessionStorage.removeItem('draftSceneId');
-                          sessionStorage.removeItem('draftHotspotCount');
-                        }}
-                        className="text-sm text-slate-400 underline mb-2 hover:text-slate-700"
-                      >
-                         Cancel & Upload A Different Scene
-                      </button>
-                      <Link 
-                        href={`/view/${sceneId}`} 
-                        className="inline-flex items-center justify-center gap-2 w-full bg-white text-green-700 border-2 border-green-200 px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-green-50 transition-all"
-                      >
-                        Preview Draft 3D Experience
-                      </Link>
-                      <button 
-                        onClick={finalizeScene}
-                        className="inline-flex items-center justify-center gap-2 w-full bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 hover:-translate-y-0.5 transition-all"
-                      >
-                        Finalize Scene (Make Live) &rarr;
-                      </button>
-                    </div>
-                  </div>
-                )}
+                 <div className={`p-4 rounded-xl text-sm font-medium flex items-center gap-3 ${
+                  sceneStatus.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+                 }`}>
+                    {sceneStatus.includes('Scanning') && <span className="animate-spin">⏳</span>}
+                    {sceneStatus}
+                 </div>
               </div>
             )}
 

@@ -52,10 +52,17 @@ export class ProductsController {
     )
     file: Express.Multer.File,
   ) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId)
+      throw new BadRequestException('No store associated with this user');
 
-    return this.productsService.uploadImage(id, file.buffer, file.originalname, tenantStoreId);
+    return this.productsService.uploadImage(
+      id,
+      file.buffer,
+      file.originalname,
+      tenantStoreId,
+    );
   }
 
   @Get('all')
@@ -73,8 +80,10 @@ export class ProductsController {
 
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: any) {
-    const tenantStoreId = user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
-    if (!tenantStoreId) throw new BadRequestException('No store associated with this user');
+    const tenantStoreId =
+      user?.stores && user.stores.length > 0 ? user.stores[0].id : null;
+    if (!tenantStoreId)
+      throw new BadRequestException('No store associated with this user');
 
     return this.productsService.delete(id, tenantStoreId);
   }

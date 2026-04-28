@@ -77,16 +77,37 @@ async def detect_objects(
 ):
     print(f"Processing Scene: {file.filename} [Model: {model_type.upper()}] [Store: {storeId}] [Scene: {sceneId}]")
     
-    # 1. Ensure we have the latest product vectors
-    if not product_embeddings_cache:
-        refresh_product_embeddings()
-
-    # Filter cache strictly to the requesting user's store
-    active_cache = [p for p in product_embeddings_cache if p['storeId'] == storeId] if storeId else product_embeddings_cache
+    active_cache = []
     
-    # If explicitly requested, filter down to the specific scene
-    if sceneId:
-        active_cache = [p for p in active_cache if p.get('sceneId') == sceneId]
+    # 1. Use the EXACT products provided by Backend in 'classes' JSON string
+    if classes is not None and classes.strip() not in ['', '__EMPTY__']:
+        try:
+            products_from_backend = json.loads(classes)
+            if isinstance(products_from_backend, list):
+                print(f"Loaded {len(products_from_backend)} specific products from backend payload.")
+                for prod in products_from_backend:
+                    embedding = None
+                    if prod.get('mainImageUrl'):
+                        img_url = f"{os.environ.get('BACKEND_URL', 'http://localhost:3001')}{prod['mainImageUrl']}"
+                        try:
+                            img_res = requests.get(img_url, timeout=5)
+                            if img_res.status_code == 200:
+                                embedding = detector.get_image_embedding(img_res.content)
+                        except Exception as e:
+                            print(f"Failed to fetch image: {e}")
+                    
+                    active_cache.append({
+                        'id': prod.get('id'),
+                        'storeId': storeId,
+                        'sceneId': sceneId,
+                        'title': prod.get('title'),
+                        'category': prod.get('category'),
+                        'embedding': embedding
+                    })
+        except json.JSONDecodeError:
+            print("Failed to parse classes JSON, falling back to legacy allowed_list.")
+            # Fallback for old comma-separated YOLO classes behavior
+            pass
 
     print(f"Matched {len(active_cache)} products for Store={storeId}, Scene={sceneId}")
 
@@ -102,8 +123,11 @@ async def detect_objects(
             results = detector.detect_best_matches(contents, active_cache)
         else:
             # FALLBACK: Basic YOLO
-            print("No product images found for this store. Falling back to basic YOLO detection.")
-            if classes is not None:
+            print("Running Basic YOLO detection.")
+            allowed_list = []
+            if len(active_cache) > 0:
+                allowed_list = list(set([p.get('category') or p.get('title') for p in active_cache]))
+            elif classes is not None and not classes.startswith('['):
                 if classes == '__EMPTY__':
                     allowed_list = []
                 else:

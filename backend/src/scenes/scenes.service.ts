@@ -82,8 +82,19 @@ export class ScenesService {
     const imageUrl = `/uploads/${filename}`;
 
     const storeProducts = await this.prisma.product.findMany({
-      where: sceneId ? { storeId, sceneId } : { storeId },
-      select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
+      where: sceneId
+        ? { storeId, OR: [{ sceneId }, { sceneId: null }] }
+        : { storeId, sceneId: null },
+      select: {
+        category: true,
+        id: true,
+        title: true,
+        price: true,
+        mainImageUrl: true,
+        externalLink: true,
+        description: true,
+        embedding: true,
+      },
     });
 
     const allowedCategories = [
@@ -95,49 +106,54 @@ export class ScenesService {
       detectedObjects = (await this.aiService.detectObjects(
         file.buffer,
         file.originalname,
-        allowedCategories as string[],
+        JSON.stringify(storeProducts),
         modelType,
         storeId,
-        sceneId
+        sceneId,
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn('AI Detection failed', msg);
     }
 
-    const hotspots = detectedObjects.map((obj) => {
-      let product = obj.product && obj.product.id 
-        ? storeProducts.find((p) => p.id === obj.product!.id) 
-        : undefined;
+    const hotspots = detectedObjects
+      .map((obj) => {
+        let product =
+          obj.product && obj.product.id
+            ? storeProducts.find((p) => p.id === obj.product!.id)
+            : undefined;
 
-      if (!product) {
-        product = storeProducts.find(
-          (p) =>
-            p.category?.toLowerCase() === obj.label.toLowerCase() ||
-            p.title.toLowerCase().includes(obj.label.toLowerCase()),
-        );
-      }
+        if (!product) {
+          product = storeProducts.find(
+            (p) =>
+              p.category?.toLowerCase() === obj.label.toLowerCase() ||
+              p.title.toLowerCase().includes(obj.label.toLowerCase()),
+          );
+        }
 
-      const yaw = obj.center.x * 360;
-      const pitch = (1 - obj.center.y) * 180 - 90;
+        const yaw = obj.center.x * 360;
+        const pitch = (1 - obj.center.y) * 180 - 90;
 
-      return {
-        productId: product ? product.id : null,
-        yaw: yaw,
-        pitch: pitch,
-        label: product ? product.title : obj.label,
-        type: HotspotType.PRODUCT,
-        box: obj.box, // keep bounding box for plotting
-        product: product ? {
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          mainImageUrl: product.mainImageUrl,
-          description: product.description,
-          externalLink: product.externalLink
-        } : undefined
-      };
-    }).filter(Boolean);
+        return {
+          productId: product ? product.id : null,
+          yaw: yaw,
+          pitch: pitch,
+          label: product ? product.title : obj.label,
+          type: HotspotType.PRODUCT,
+          box: obj.box, // keep bounding box for plotting
+          product: product
+            ? {
+                id: product.id,
+                title: product.title,
+                price: product.price,
+                mainImageUrl: product.mainImageUrl,
+                description: product.description,
+                externalLink: product.externalLink,
+              }
+            : undefined,
+        };
+      })
+      .filter(Boolean);
 
     return {
       success: true,
@@ -154,14 +170,26 @@ export class ScenesService {
     sceneId?: string,
   ) {
     const filePath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
-    if (!fs.existsSync(filePath)) throw new Error('Image file not found on server');
-    
+    if (!fs.existsSync(filePath))
+      throw new Error('Image file not found on server');
+
     const buffer = fs.readFileSync(filePath);
     const filename = path.basename(filePath);
 
     const storeProducts = await this.prisma.product.findMany({
-      where: sceneId ? { storeId, sceneId } : { storeId },
-      select: { category: true, id: true, title: true, price: true, mainImageUrl: true, externalLink: true, description: true },
+      where: sceneId
+        ? { storeId, OR: [{ sceneId }, { sceneId: null }] }
+        : { storeId, sceneId: null },
+      select: {
+        category: true,
+        id: true,
+        title: true,
+        price: true,
+        mainImageUrl: true,
+        externalLink: true,
+        description: true,
+        embedding: true,
+      },
     });
 
     const allowedCategories = [
@@ -173,49 +201,54 @@ export class ScenesService {
       detectedObjects = (await this.aiService.detectObjects(
         buffer,
         filename,
-        allowedCategories as string[],
+        JSON.stringify(storeProducts),
         modelType,
         storeId,
-        sceneId
+        sceneId,
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`AI Detection failed for ${modelType}`, msg);
     }
 
-    const hotspots = detectedObjects.map((obj) => {
-      let product = obj.product && obj.product.id 
-        ? storeProducts.find((p) => p.id === obj.product!.id) 
-        : undefined;
+    const hotspots = detectedObjects
+      .map((obj) => {
+        let product =
+          obj.product && obj.product.id
+            ? storeProducts.find((p) => p.id === obj.product!.id)
+            : undefined;
 
-      if (!product) {
-        product = storeProducts.find(
-          (p) =>
-            p.category?.toLowerCase() === obj.label.toLowerCase() ||
-            p.title.toLowerCase().includes(obj.label.toLowerCase()),
-        );
-      }
+        if (!product) {
+          product = storeProducts.find(
+            (p) =>
+              p.category?.toLowerCase() === obj.label.toLowerCase() ||
+              p.title.toLowerCase().includes(obj.label.toLowerCase()),
+          );
+        }
 
-      const yaw = obj.center.x * 360;
-      const pitch = (1 - obj.center.y) * 180 - 90;
+        const yaw = obj.center.x * 360;
+        const pitch = (1 - obj.center.y) * 180 - 90;
 
-      return {
-        productId: product ? product.id : null,
-        yaw: yaw,
-        pitch: pitch,
-        label: product ? product.title : obj.label,
-        type: HotspotType.PRODUCT,
-        box: obj.box,
-        product: product ? {
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          mainImageUrl: product.mainImageUrl,
-          description: product.description,
-          externalLink: product.externalLink
-        } : undefined
-      };
-    }).filter(Boolean);
+        return {
+          productId: product ? product.id : null,
+          yaw: yaw,
+          pitch: pitch,
+          label: product ? product.title : obj.label,
+          type: HotspotType.PRODUCT,
+          box: obj.box,
+          product: product
+            ? {
+                id: product.id,
+                title: product.title,
+                price: product.price,
+                mainImageUrl: product.mainImageUrl,
+                description: product.description,
+                externalLink: product.externalLink,
+              }
+            : undefined,
+        };
+      })
+      .filter(Boolean);
 
     return {
       success: true,
@@ -225,7 +258,14 @@ export class ScenesService {
     };
   }
 
-  async createSceneWithHotspots(storeId: string, title: string, imageUrl: string, hotspots: any[], status: string = 'LIVE', modelType: string = 'yolo') {
+  async createSceneWithHotspots(
+    storeId: string,
+    title: string,
+    imageUrl: string,
+    hotspots: any[],
+    status: string = 'LIVE',
+    modelType: string = 'yolo',
+  ) {
     const scene = await this.prisma.scene.create({
       data: {
         storeId,
@@ -249,20 +289,33 @@ export class ScenesService {
       });
     }
 
-      if (status === 'LIVE') {
-        await this.prisma.product.updateMany({
-          where: { storeId, sceneId: null },
-          data: { sceneId: scene.id },
-        });
-      }
-
-      return { success: true, sceneId: scene.id };
+    if (status === 'LIVE') {
+      await this.prisma.product.updateMany({
+        where: { storeId, sceneId: null },
+        data: { sceneId: scene.id },
+      });
     }
+
+    return { success: true, sceneId: scene.id };
+  }
+
+  // --- NEW: DRAFT SCENE SUPPORT ---
+  async createDraftScene(storeId: string) {
+    return this.prisma.scene.create({
+      data: {
+        storeId,
+        title: 'Draft Scene',
+        imageUrl: '',
+        status: 'DRAFT',
+      },
+    });
+  }
 
   async processScene(
     storeId: string,
     file: Express.Multer.File,
     title: string,
+    draftSceneId?: string,
   ) {
     // 1. SAVE FILE (Simulating S3)
     const uploadDir = path.join(process.cwd(), 'uploads');
@@ -272,34 +325,29 @@ export class ScenesService {
     fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
     const imageUrl = `/uploads/${filename}`;
 
-    // 2. FETCH STORE INVENTORY (The "Future Automatic" Logic)
-    // We get all products for this store to find their CATEGORIES.
-    // e.g. ["shoe", "bag"]
+    // 2. FETCH STORE INVENTORY FOR THIS EXACT SCENE
     const storeProducts = await this.prisma.product.findMany({
-      where: { storeId },
-      select: { category: true, id: true, title: true },
+      where: draftSceneId
+        ? { storeId, sceneId: draftSceneId }
+        : { storeId, sceneId: null },
+      select: {
+        category: true,
+        id: true,
+        title: true,
+        mainImageUrl: true,
+        embedding: true,
+      },
     });
 
-    // Make a unique list of categories to tell AI what to look for
-    // e.g. Set("shoe", "bag") -> ["shoe", "bag"]
-    const allowedCategories = [
-      ...new Set(storeProducts.map((p) => p.category).filter(Boolean)),
-    ];
-
-    console.log(
-      `[Auto-AI] Scanning for categories: ${allowedCategories.join(', ')}`,
-    );
-
-    // 3. RUN AI DETECTION
-    // This is the Magic Step.
     let detectedObjects: DetectedObject[] = [];
     try {
       detectedObjects = (await this.aiService.detectObjects(
         file.buffer,
         file.originalname,
-        allowedCategories as string[],
+        JSON.stringify(storeProducts), // Pass exclusively the scene-scoped items
         'yolo', // Added explicit default yolo
         storeId,
+        draftSceneId,
       )) as unknown as DetectedObject[];
     } catch (e: unknown) {
       // Safely handle unknown error type
@@ -311,65 +359,73 @@ export class ScenesService {
     }
 
     // 4. SAVE SCENE TO DB
-    const scene = await this.prisma.scene.create({
-      data: {
-        storeId,
-        title: title || 'Untitled Scene',
-        imageUrl: imageUrl,
-      },
-    });
-
-    // 5. AUTO-CREATE HOTSPOTS
-    if (detectedObjects.length > 0) {
-      const hotspotsData = detectedObjects
-        .map((obj) => {
-          // 1. Trust the AI Link first (if Python CLIP found a match)
-          let product: (typeof storeProducts)[0] | undefined;
-          if (obj.product && obj.product.id) {
-            product = storeProducts.find((p) => p.id === obj.product!.id);
-          }
-
-          // 2. Fallback: Try name match (only if AI didn't provide a specific link)
-          if (!product) {
-            product = storeProducts.find(
-              (p) =>
-                p.category?.toLowerCase() === obj.label.toLowerCase() ||
-                p.title.toLowerCase().includes(obj.label.toLowerCase()),
-            );
-          }
-
-          // Convert normalized Center X/Y (0-1) to Yaw/Pitch (Degrees)
-          // X: 0..1 -> 0..360 (Yaw) - Adjusted to fix "Opposite Direction"
-          // Y: 0..1 -> 90..-90 (Pitch)
-          const yaw = obj.center.x * 360;
-          const pitch = (1 - obj.center.y) * 180 - 90;
-
-          return {
-            sceneId: scene.id,
-            productId: product ? product.id : null,
-            // Use Positive Yaw (Left-to-Right mapping)
-            yaw: yaw,
-            pitch: pitch,
-            label: product ? product.title : obj.label,
-            type: HotspotType.PRODUCT,
-          } as const;
-        })
-        .filter((h): h is NonNullable<typeof h> => h !== null);
-
-      // Bulk Insert Hotspots
-      if (hotspotsData.length > 0) {
-        await this.prisma.hotspot.createMany({
-          data: hotspotsData.map((h) => ({
-            ...h,
-            type: HotspotType.PRODUCT, // Ensure enum matching
-          })),
-        });
-      }
-
-      console.log(
-        `[Auto-AI] Created ${hotspotsData.length} hotspots automatically.`,
-      );
+    let scene;
+    if (draftSceneId) {
+      scene = await this.prisma.scene.update({
+        where: { id: draftSceneId },
+        data: {
+          title: title || 'Untitled Scene',
+          imageUrl: imageUrl,
+        },
+      });
+    } else {
+      scene = await this.prisma.scene.create({
+        data: {
+          storeId,
+          title: title || 'Untitled Scene',
+          imageUrl: imageUrl,
+        },
+      });
     }
+
+    const hotspotsData = detectedObjects
+      .map((obj) => {
+        // 1. Trust the AI Link first (if Python CLIP found a match)
+        let product: (typeof storeProducts)[0] | undefined;
+        if (obj.product && obj.product.id) {
+          product = storeProducts.find((p) => p.id === obj.product!.id);
+        }
+
+        // 2. Fallback: Try name match (only if AI didn't provide a specific link)
+        if (!product) {
+          product = storeProducts.find(
+            (p) =>
+              p.category?.toLowerCase() === obj.label.toLowerCase() ||
+              p.title.toLowerCase().includes(obj.label.toLowerCase()),
+          );
+        }
+
+        // Convert normalized Center X/Y (0-1) to Yaw/Pitch (Degrees)
+        // X: 0..1 -> 0..360 (Yaw) - Adjusted to fix "Opposite Direction"
+        // Y: 0..1 -> 90..-90 (Pitch)
+        const yaw = obj.center.x * 360;
+        const pitch = (1 - obj.center.y) * 180 - 90;
+
+        return {
+          sceneId: scene.id,
+          productId: product ? product.id : null,
+          // Use Positive Yaw (Left-to-Right mapping)
+          yaw: yaw,
+          pitch: pitch,
+          label: product ? product.title : obj.label,
+          type: HotspotType.PRODUCT,
+        } as const;
+      })
+      .filter((h): h is NonNullable<typeof h> => h !== null);
+
+    // Bulk Insert Hotspots
+    if (hotspotsData.length > 0) {
+      await this.prisma.hotspot.createMany({
+        data: hotspotsData.map((h) => ({
+          ...h,
+          type: HotspotType.PRODUCT, // Ensure enum matching
+        })),
+      });
+    }
+
+    console.log(
+      `[Auto-AI] Created ${hotspotsData.length} hotspots automatically.`,
+    );
 
     return {
       success: true,
@@ -382,46 +438,46 @@ export class ScenesService {
   async replaceLiveWithDraft(liveId: string, draftId: string) {
     const draft = await this.prisma.scene.findUnique({
       where: { id: draftId },
-      include: { hotspots: true }
+      include: { hotspots: true },
     });
     if (!draft) throw new Error('Draft not found');
 
     await this.prisma.hotspot.deleteMany({
-      where: { sceneId: liveId }
+      where: { sceneId: liveId },
     });
 
     await this.prisma.scene.update({
       where: { id: liveId },
       data: {
         modelType: draft.modelType,
-        title: draft.title
-      }
+        title: draft.title,
+      },
     });
 
     if (draft.hotspots.length > 0) {
       await this.prisma.hotspot.createMany({
-        data: draft.hotspots.map(h => ({
+        data: draft.hotspots.map((h) => ({
           sceneId: liveId,
           productId: h.productId,
           yaw: h.yaw,
           pitch: h.pitch,
           label: h.label,
-          type: HotspotType.PRODUCT
-        }))
+          type: HotspotType.PRODUCT,
+        })),
       });
     }
 
     await this.prisma.product.updateMany({
       where: { sceneId: draftId },
-      data: { sceneId: liveId }
+      data: { sceneId: liveId },
     });
 
     await this.prisma.hotspot.deleteMany({
-      where: { sceneId: draftId }
+      where: { sceneId: draftId },
     });
 
     await this.prisma.scene.delete({
-      where: { id: draftId }
+      where: { id: draftId },
     });
 
     return { success: true };
@@ -438,7 +494,16 @@ export class ScenesService {
     });
   }
 
-  async updateScene(id: string, data: { title?: string, imageUrl?: string, hotspots?: any[], status?: string, modelType?: string }) {
+  async updateScene(
+    id: string,
+    data: {
+      title?: string;
+      imageUrl?: string;
+      hotspots?: any[];
+      status?: string;
+      modelType?: string;
+    },
+  ) {
     await this.prisma.$transaction(async (tx) => {
       const updateData: any = {};
       if (data.title !== undefined) updateData.title = data.title;
@@ -467,15 +532,15 @@ export class ScenesService {
         }
       }
 
-        if (data.status === 'LIVE') {
-          const sceneToUpdate = await tx.scene.findUnique({ where: { id } });
-          if (sceneToUpdate) {
-            await tx.product.updateMany({
-              where: { storeId: sceneToUpdate.storeId, sceneId: null },
-              data: { sceneId: id },
-            });
-          }
+      if (data.status === 'LIVE') {
+        const sceneToUpdate = await tx.scene.findUnique({ where: { id } });
+        if (sceneToUpdate) {
+          await tx.product.updateMany({
+            where: { storeId: sceneToUpdate.storeId, sceneId: null },
+            data: { sceneId: id },
+          });
         }
+      }
     });
     return { success: true };
   }
@@ -545,9 +610,7 @@ export class ScenesService {
     let command: string;
 
     if (mode === 'cubemap') {
-      console.log(
-        '[Stitch Service] Mode: CUBEMAP -> Using cubemap.py',
-      );
+      console.log('[Stitch Service] Mode: CUBEMAP -> Using cubemap.py');
       scriptPath = path.join(
         process.cwd(),
         '..',

@@ -3,19 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
 
 @Injectable()
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
-
-  private async notifyAiWorker() {
-    try {
-      await axios.post(process.env.AI_WORKER_URL ? `${process.env.AI_WORKER_URL}/refresh-db` : 'http://localhost:8000/refresh-db');
-    } catch (e) {
-      console.warn('Failed to notify AI worker:', e.message);
-    }
-  }
 
   async create(storeId: string, dto: CreateProductDto) {
     // 1. Create the product entry in DB
@@ -30,11 +21,15 @@ export class ProductsService {
         externalLink: dto.externalLink,
       },
     });
-    this.notifyAiWorker();
     return res;
   }
 
-  async uploadImage(productId: string, fileBuffer: Buffer, filename: string, storeId: string) {  
+  async uploadImage(
+    productId: string,
+    fileBuffer: Buffer,
+    filename: string,
+    storeId: string,
+  ) {
     // 1. Check if product exists
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -71,7 +66,6 @@ export class ProductsService {
       where: { id: productId },
       data: { mainImageUrl: fakePublicUrl },
     });
-    this.notifyAiWorker();
     return updated;
   }
 
@@ -99,7 +93,6 @@ export class ProductsService {
         where: { id },
       });
     });
-    this.notifyAiWorker();
     return { success: true };
   }
 
@@ -110,12 +103,9 @@ export class ProductsService {
   async findAll(storeId: string, sceneId?: string) {
     if (sceneId) {
       return this.prisma.product.findMany({
-        where: { 
+        where: {
           storeId,
-          OR: [
-            { sceneId: sceneId },
-            { sceneId: null }
-          ]
+          OR: [{ sceneId: sceneId }, { sceneId: null }],
         },
       });
     }

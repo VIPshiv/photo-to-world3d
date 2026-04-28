@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
@@ -260,6 +259,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
             formData.append('file', sceneFile);
             formData.append('title', sceneTitle);
             formData.append('modelType', modelType);
+            formData.append('sceneId', id);
 
             const res = await fetch(apiUrl('/scenes/analyze'), {
                 method: 'POST',
@@ -286,7 +286,7 @@ export default function EditScenePage({ params }: { params: Promise<{ id: string
             const res = await fetch(apiUrl('/scenes/analyze-existing'), {
                 method: 'POST',
                 headers: { 'x-mock-user-id': localStorage.getItem('mockUserId') || '', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageUrl: serverImgUrl, modelType: modelType }),
+                body: JSON.stringify({ imageUrl: serverImgUrl, modelType: modelType, sceneId: id }),
             });
             const data = await res.json();
             if (res.ok) {

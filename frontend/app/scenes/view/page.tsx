@@ -74,7 +74,7 @@ export default function ViewScenesPage() {
                 <Link href={`/view/${scene.id}`} className="block relative aspect-video bg-slate-100 cursor-pointer overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={scene.imageUrl ? apiUrl(scene.imageUrl) : ''}
+                    src={scene.imageUrl ? apiUrl(scene.imageUrl) : undefined}
                     alt={scene.title}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   />
